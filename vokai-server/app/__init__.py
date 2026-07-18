@@ -1,0 +1,1 @@
+"""VOKAI FastAPI application package."""

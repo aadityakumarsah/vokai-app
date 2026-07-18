@@ -1,0 +1,32 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/vokai.db
+**/vokai.db-*
+
+# JavaScript dependencies and Expo caches
+**/node_modules/
+**/.expo/
+**/dist/
+**/*.log
+
+# Native build output
+**/android/.gradle/
+**/android/build/
+**/android/app/build/
+**/android/app/.cxx/
+**/ios/build/
+**/ios/Pods/
+**/ios/.xcode.env.local
+
+# OS/editor files
+.DS_Store
+.localized
+.idea/
+.vscode/

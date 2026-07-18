@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "VOKAI",
+    "slug": "vokai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "vokai",
+    "android": {
+      "package": "com.vokai.learn",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7FAF4"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-web-browser",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow VOKAI to use your microphone for voice typing.",
+          "speechRecognitionPermission": "Allow VOKAI to turn your speech into text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.tts",
+            "com.google.android.as"
+          ]
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "bundleIdentifier": "com.vokai.learn"
+    }
+  }
+}
