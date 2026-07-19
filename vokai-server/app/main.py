@@ -98,16 +98,19 @@ CHECKIN_REWARDS = {
 }
 
 OFFICIAL_DOCS_ORIGIN = "https://docs-vokai.vercel.app"
+LOCAL_DOCS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 
 
 def cors_origins() -> list[str]:
     configured = [origin.strip().rstrip("/") for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
     if not configured or "*" in configured:
         return ["*"]
-    # The public VOKAI Docs client is a first-party consumer of this API. Keep
-    # it available even if Render's environment was saved with an older origin.
-    if OFFICIAL_DOCS_ORIGIN not in configured:
-        configured.append(OFFICIAL_DOCS_ORIGIN)
+    # The public VOKAI Docs client and its Vite development server are
+    # first-party consumers of this API. Keep them available even if Render's
+    # environment was saved with an older origin list.
+    for origin in (OFFICIAL_DOCS_ORIGIN, *LOCAL_DOCS_ORIGINS):
+        if origin not in configured:
+            configured.append(origin)
     return configured
 
 
