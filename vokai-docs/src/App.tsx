@@ -274,10 +274,14 @@ function App() {
 
   useEffect(() => {
     attemptHeroPlayback();
+    const unlockSound = () => attemptHeroPlayback();
+    const unlockEvents: Array<keyof WindowEventMap> = ["pointerdown", "touchstart", "keydown", "wheel", "scroll"];
+    unlockEvents.forEach((eventName) => window.addEventListener(eventName, unlockSound, { once: true, passive: true }));
+    return () => unlockEvents.forEach((eventName) => window.removeEventListener(eventName, unlockSound));
   }, []);
 
   const createCursorBloom = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!bloomLayerRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (event.pointerType !== "mouse" || !bloomLayerRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const bloom = document.createElement("span");
     bloom.className = "cursor-bloom";
@@ -371,7 +375,13 @@ function App() {
     const hero = heroSectionRef.current;
     const heroContent = heroContentRef.current;
     const guide = guideRevealRef.current;
-    if (!hero || !heroContent || !guide || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (
+      !hero
+      || !heroContent
+      || !guide
+      || window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      || window.matchMedia("(max-width: 760px)").matches
+    ) return;
 
     const context = gsap.context(() => {
       const guideSections = guide.querySelectorAll("main > section");
@@ -448,14 +458,17 @@ function App() {
             </div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
-            {menuOpen ? <X /> : <Menu />}
-          </Button>
+          <div className="landing-mobile-actions">
+            <a className="landing-mobile-prebook" href="#premium" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /><span>Pre-book</span></a>
+            <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
+              {menuOpen ? <X /> : <Menu />}
+            </Button>
+          </div>
         </div>
       </header>
 
       <section ref={heroSectionRef} id="start" className="docs-hero" onPointerDown={attemptHeroPlayback}>
-        <video ref={heroVideoRef} className="docs-hero-video" loop playsInline controls={false} muted={!heroSoundEnabled} preload="auto" disablePictureInPicture disableRemotePlayback aria-hidden="true">
+        <video ref={heroVideoRef} className="docs-hero-video" autoPlay loop playsInline controls={false} muted={!heroSoundEnabled} preload="auto" disablePictureInPicture disableRemotePlayback aria-hidden="true">
           <source src={heroVideoUrl} type="video/mp4" />
         </video>
         <div className="docs-hero-scrim" aria-hidden="true" />
@@ -470,7 +483,8 @@ function App() {
       </section>
 
       <div ref={guideRevealRef} className={`docs-guide-shell mx-auto grid max-w-[1440px] ${sidebarHidden ? "lg:grid-cols-1" : "lg:grid-cols-[260px_minmax(0,1fr)]"}`}>
-        <aside id="docs-sidebar" className={`${menuOpen ? "block" : "hidden"} fixed inset-x-0 top-20 z-30 max-h-[calc(100dvh-5rem)] overflow-y-auto border-b border-stone-200 bg-[#F8F6F0] p-4 ${sidebarHidden ? "lg:hidden" : "lg:sticky lg:top-0 lg:block lg:h-screen lg:border-r lg:border-b-0 lg:px-5 lg:py-8"}`}>
+        <aside id="docs-sidebar" className={`${menuOpen ? "block" : "hidden"} fixed inset-x-0 top-[5.5rem] z-30 max-h-[calc(100dvh-5.5rem)] overflow-y-auto rounded-b-[1.5rem] border-b border-stone-200 bg-[#F8F6F0] p-4 shadow-[0_20px_44px_rgba(36,51,40,.18)] ${sidebarHidden ? "lg:hidden" : "lg:sticky lg:top-0 lg:block lg:h-screen lg:rounded-none lg:border-r lg:border-b-0 lg:px-5 lg:py-8 lg:shadow-none"}`}>
+          <a href="#premium" onClick={closeMenu} className="mb-5 flex items-center justify-between rounded-2xl bg-vokai-ink px-4 py-3 text-sm font-bold text-white lg:hidden"><span className="inline-flex items-center gap-2"><Sparkles className="size-4 text-[#F9DEA3]" /> Pre-book VOKAI Premium</span><ArrowRight className="size-4 text-[#F9DEA3]" /></a>
           <p className="mb-3 px-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">For learners</p>
           <NavLinks items={learnerNavigation} onNavigate={closeMenu} />
           <p className="mb-3 mt-7 px-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">For developers</p>
@@ -482,14 +496,19 @@ function App() {
           </div>
         </aside>
 
-        <main className="min-w-0 px-4 py-10 sm:px-8 lg:px-14 lg:py-14">
+        <main className="min-w-0 px-5 py-9 sm:px-8 lg:px-14 lg:py-14">
           <section id="guide" className="scroll-mt-6 border-b border-stone-200 pb-16">
             <div className="mb-10 flex items-center justify-between gap-4 border-b border-stone-200 pb-4">
               <div><p className="text-[11px] font-bold tracking-[0.16em] text-vokai-forest uppercase">The VOKAI guide</p><p className="mt-1 text-sm text-stone-500">Everything you need to build a steady coding rhythm.</p></div>
-              <Button variant="outline" size="sm" className="hidden lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden}>
-                {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
-                {sidebarHidden ? "Show guide" : "Hide guide"}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="outline" size="sm" className="hidden lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden}>
+                  {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
+                  {sidebarHidden ? "Show guide" : "Hide guide"}
+                </Button>
+                <Button variant="outline" size="sm" className="inline-flex lg:hidden" onClick={() => setMenuOpen(true)} aria-controls="docs-sidebar" aria-expanded={menuOpen}>
+                  <Menu /> Guide
+                </Button>
+              </div>
             </div>
             <SectionTitle eyebrow="Start here" title="Build a calm, consistent coding practice.">VOKAI turns a vague goal into one clear, manageable next step each day—so practice can fit around the rest of your life.</SectionTitle>
             <div className="mt-12 grid gap-4 md:grid-cols-3">

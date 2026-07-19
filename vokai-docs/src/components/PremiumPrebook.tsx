@@ -58,15 +58,15 @@ export function PremiumPrebook() {
             <h2 className="mt-5 max-w-xl font-display text-4xl leading-[.98] tracking-tight sm:text-5xl">Protect more room for your coding journey.</h2>
             <p className="mt-4 max-w-xl text-[15px] leading-7 text-white/76">Choose a plan now and continue to Dodo’s secure checkout. Your details are added to VOKAI only after Dodo confirms the payment.</p>
 
-            <div className="mt-7 grid gap-3 sm:grid-cols-3">
+            <div className="mt-7 grid grid-cols-3 gap-2 sm:gap-3">
               {plans.map((item) => {
                 const selected = plan === item.id;
-                return <button key={item.id} type="button" onClick={() => setPlan(item.id)} className={`relative rounded-2xl border p-4 text-left transition duration-200 ${selected ? "border-[#F9DEA3] bg-white/16 shadow-[0_10px_24px_rgba(0,0,0,.15)]" : "border-white/14 bg-white/[.06] hover:border-white/30 hover:bg-white/[.1]"}`} aria-pressed={selected}>
+                return <button key={item.id} type="button" onClick={() => setPlan(item.id)} className={`relative rounded-2xl border p-3 text-left transition duration-200 sm:p-4 ${selected ? "border-[#F9DEA3] bg-white/16 shadow-[0_10px_24px_rgba(0,0,0,.15)]" : "border-white/14 bg-white/[.06] hover:border-white/30 hover:bg-white/[.1]"}`} aria-pressed={selected}>
                   {item.featured && <span className="absolute -top-2.5 left-3 rounded-full bg-[#F9DEA3] px-2 py-0.5 text-[9px] font-extrabold tracking-wider text-[#5C431D] uppercase">Popular</span>}
                   <p className="text-xs font-bold text-white/72">{item.label}</p>
-                  <p className="mt-2 font-display text-3xl tracking-tight">{item.price}<span className="ml-1 font-sans text-xs font-medium text-white/60">{item.period}</span></p>
-                  <p className="mt-2 text-xs leading-5 text-white/65">{item.detail}</p>
-                  <span className={`mt-3 inline-flex size-4 items-center justify-center rounded-full border ${selected ? "border-[#F9DEA3] bg-[#F9DEA3] text-[#34513E]" : "border-white/35 text-transparent"}`}><Check className="size-3 stroke-[3]" /></span>
+                  <p className="mt-2 font-display text-2xl tracking-tight sm:text-3xl">{item.price}<span className="ml-1 font-sans text-[10px] font-medium text-white/60 sm:text-xs">{item.period}</span></p>
+                  <p className="mt-2 hidden text-xs leading-5 text-white/65 sm:block">{item.detail}</p>
+                  <span className={`mt-2 inline-flex size-4 items-center justify-center rounded-full border sm:mt-3 ${selected ? "border-[#F9DEA3] bg-[#F9DEA3] text-[#34513E]" : "border-white/35 text-transparent"}`}><Check className="size-3 stroke-[3]" /></span>
                 </button>;
               })}
             </div>
