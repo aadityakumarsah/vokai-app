@@ -48,43 +48,47 @@ export function PremiumPrebook() {
   };
 
   return (
-    <section id="premium" className="scroll-mt-24 border-b border-stone-200 py-16">
-      <div className="relative overflow-hidden rounded-[2rem] bg-[#18374A] px-5 py-8 text-white shadow-[0_22px_60px_rgba(22,55,74,.22)] sm:px-8 sm:py-10 lg:px-10">
+    <section id="premium" className="scroll-mt-24 border-b border-stone-200 py-10 sm:py-16">
+      <div className="relative overflow-hidden rounded-[1.5rem] bg-[#18374A] px-5 py-8 text-white shadow-[0_22px_60px_rgba(22,55,74,.22)] sm:rounded-[2rem] sm:px-8 sm:py-10 lg:px-10">
         <div className="pointer-events-none absolute -right-20 -top-28 size-80 rounded-full bg-[#E7A1B2]/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-32 left-1/4 size-72 rounded-full bg-[#A4D7C6]/15 blur-3xl" />
         <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,.8fr)] lg:items-start">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold tracking-[.14em] text-[#FBE8B6] uppercase"><Crown className="size-3.5" /> VOKAI Premium</div>
-            <h2 className="mt-5 max-w-xl font-display text-4xl leading-[.98] tracking-tight sm:text-5xl">Protect more room for your coding journey.</h2>
-            <p className="mt-4 max-w-xl text-[15px] leading-7 text-white/76">Choose a plan now and continue to Dodo’s secure checkout. Your details are added to VOKAI only after Dodo confirms the payment.</p>
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold tracking-[.14em] text-[#FBE8B6] uppercase sm:gap-2 sm:px-3 sm:py-1.5 sm:text-[11px]"><Crown className="size-3 sm:size-3.5" /> VOKAI Premium</div>
+            <h2 className="mt-4 max-w-xl font-display text-3xl leading-[1.05] tracking-tight sm:mt-5 sm:text-5xl sm:leading-[.98]">Protect more room for your coding journey.</h2>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-white/76 sm:mt-4 sm:text-[15px] sm:leading-7">Choose a plan now and continue to Dodo’s secure checkout. Your details are added to VOKAI only after Dodo confirms the payment.</p>
 
-            <div className="mt-7 grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="mt-6 flex flex-col gap-2.5 sm:mt-7 sm:grid sm:grid-cols-3 sm:gap-3">
               {plans.map((item) => {
                 const selected = plan === item.id;
-                return <button key={item.id} type="button" onClick={() => setPlan(item.id)} className={`relative rounded-2xl border p-3 text-left transition duration-200 sm:p-4 ${selected ? "border-[#F9DEA3] bg-white/16 shadow-[0_10px_24px_rgba(0,0,0,.15)]" : "border-white/14 bg-white/[.06] hover:border-white/30 hover:bg-white/[.1]"}`} aria-pressed={selected}>
-                  {item.featured && <span className="absolute -top-2.5 left-3 rounded-full bg-[#F9DEA3] px-2 py-0.5 text-[9px] font-extrabold tracking-wider text-[#5C431D] uppercase">Popular</span>}
-                  <p className="text-xs font-bold text-white/72">{item.label}</p>
-                  <p className="mt-2 font-display text-2xl tracking-tight sm:text-3xl">{item.price}<span className="ml-1 font-sans text-[10px] font-medium text-white/60 sm:text-xs">{item.period}</span></p>
+                return <button key={item.id} type="button" onClick={() => setPlan(item.id)} className={`relative flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left transition duration-200 sm:block sm:rounded-2xl sm:p-4 ${selected ? "border-[#F9DEA3] bg-white/16 shadow-[0_10px_24px_rgba(0,0,0,.15)]" : "border-white/14 bg-white/[.06] hover:border-white/30 hover:bg-white/[.1]"}`} aria-pressed={selected}>
+                  {item.featured && <span className="absolute -top-2.5 left-4 rounded-full bg-[#F9DEA3] px-2 py-0.5 text-[9px] font-extrabold tracking-wider text-[#5C431D] uppercase sm:left-3">Popular</span>}
+                  
+                  <div className="flex items-baseline gap-2 sm:block sm:gap-0">
+                    <p className="w-14 text-xs font-bold text-white/72 sm:w-auto">{item.label}</p>
+                    <p className="font-display text-xl tracking-tight sm:mt-2 sm:text-3xl">{item.price}<span className="ml-1 font-sans text-xs font-medium text-white/60">{item.period}</span></p>
+                  </div>
+                  
                   <p className="mt-2 hidden text-xs leading-5 text-white/65 sm:block">{item.detail}</p>
-                  <span className={`mt-2 inline-flex size-4 items-center justify-center rounded-full border sm:mt-3 ${selected ? "border-[#F9DEA3] bg-[#F9DEA3] text-[#34513E]" : "border-white/35 text-transparent"}`}><Check className="size-3 stroke-[3]" /></span>
+                  <span className={`inline-flex size-4 shrink-0 items-center justify-center rounded-full border sm:mt-3 ${selected ? "border-[#F9DEA3] bg-[#F9DEA3] text-[#34513E]" : "border-white/35 text-transparent"}`}><Check className="size-3 stroke-[3]" /></span>
                 </button>;
               })}
             </div>
 
-            <div className="mt-7 flex items-center gap-2 text-xs leading-5 text-white/66"><ShieldCheck className="size-4 shrink-0 text-[#A4D7C6]" /> Payment details are entered only on Dodo’s hosted checkout page.</div>
+            <div className="mt-5 flex items-center gap-1.5 text-[11px] leading-4 text-white/66 sm:mt-7 sm:gap-2 sm:text-xs sm:leading-5"><ShieldCheck className="size-3.5 shrink-0 text-[#A4D7C6] sm:size-4" /> Payment details are entered only on Dodo’s hosted checkout page.</div>
           </div>
 
-          <form onSubmit={submit} className="rounded-[1.45rem] border border-white/16 bg-[#0E2635]/72 p-5 shadow-xl backdrop-blur-sm sm:p-6">
-            <p className="text-xs font-bold tracking-[.15em] text-[#A4D7C6] uppercase">Pre-book Premium</p>
-            <h3 className="mt-2 font-display text-3xl tracking-tight">Reserve {plans.find((item) => item.id === plan)?.label}</h3>
-            <label className="mt-5 block text-xs font-semibold text-white/75" htmlFor="premium-name">Your name
-              <input id="premium-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} autoComplete="name" placeholder="Your name" className="mt-2 h-11 w-full rounded-xl border border-white/18 bg-white/10 px-3 text-sm text-white outline-none placeholder:text-white/40 transition focus:border-[#F9DEA3] focus:bg-white/[.14]" />
+          <form onSubmit={submit} className="rounded-[1.25rem] border border-white/16 bg-[#0E2635]/72 p-5 shadow-xl backdrop-blur-sm sm:rounded-[1.45rem] sm:p-6">
+            <p className="text-[11px] font-bold tracking-[.15em] text-[#A4D7C6] uppercase sm:text-xs">Pre-book Premium</p>
+            <h3 className="mt-1.5 font-display text-2xl tracking-tight sm:mt-2 sm:text-3xl">Reserve {plans.find((item) => item.id === plan)?.label}</h3>
+            <label className="mt-4 block text-xs font-semibold text-white/75 sm:mt-5" htmlFor="premium-name">Your name
+              <input id="premium-name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={80} autoComplete="name" placeholder="Your name" className="mt-1.5 h-10 w-full rounded-xl border border-white/18 bg-white/10 px-3 text-sm text-white outline-none placeholder:text-white/40 transition focus:border-[#F9DEA3] focus:bg-white/[.14] sm:mt-2 sm:h-11" />
             </label>
-            <label className="mt-4 block text-xs font-semibold text-white/75" htmlFor="premium-email">Email address
-              <input id="premium-email" value={email} onChange={(event) => setEmail(event.target.value)} required type="email" maxLength={320} autoComplete="email" placeholder="you@example.com" className="mt-2 h-11 w-full rounded-xl border border-white/18 bg-white/10 px-3 text-sm text-white outline-none placeholder:text-white/40 transition focus:border-[#F9DEA3] focus:bg-white/[.14]" />
+            <label className="mt-3 block text-xs font-semibold text-white/75 sm:mt-4" htmlFor="premium-email">Email address
+              <input id="premium-email" value={email} onChange={(event) => setEmail(event.target.value)} required type="email" maxLength={320} autoComplete="email" placeholder="you@example.com" className="mt-1.5 h-10 w-full rounded-xl border border-white/18 bg-white/10 px-3 text-sm text-white outline-none placeholder:text-white/40 transition focus:border-[#F9DEA3] focus:bg-white/[.14] sm:mt-2 sm:h-11" />
             </label>
-            {message && <p className="mt-4 rounded-xl border border-[#F8D7A7]/30 bg-[#7F4D3E]/35 px-3 py-2 text-xs leading-5 text-[#FFE1B3]" role="status">{message}</p>}
-            <button type="submit" disabled={submitting} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#F9DEA3] px-4 text-sm font-extrabold text-[#34513E] transition hover:bg-[#FFF0C8] disabled:cursor-wait disabled:opacity-70">
+            {message && <p className="mt-3 rounded-xl border border-[#F8D7A7]/30 bg-[#7F4D3E]/35 px-3 py-2 text-xs leading-5 text-[#FFE1B3] sm:mt-4" role="status">{message}</p>}
+            <button type="submit" disabled={submitting} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F9DEA3] px-4 text-sm font-extrabold text-[#34513E] transition hover:bg-[#FFF0C8] disabled:cursor-wait disabled:opacity-70 sm:mt-5 sm:h-11">
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Crown className="size-4" />} {submitting ? "Opening checkout…" : `Pre-book for ${plans.find((item) => item.id === plan)?.price}`} <ArrowRight className="size-4" />
             </button>
             <p className="mt-3 text-center text-[11px] leading-5 text-white/52">You will be redirected to Dodo Payments to complete this pre-booking.</p>

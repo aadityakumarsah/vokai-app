@@ -705,7 +705,7 @@
 
 @media (max-width: 480px) {
   .tour-stage { padding: .75rem; }
-  .tour-phone-shell { width: min(100%, 290px); border-radius: 1.6rem; border-width: 6px; }
+  .tour-phone-shell { width: min(100%, 290px); flex: none; border-radius: 1.6rem; border-width: 6px; }
   .tour-visual-row { flex-direction: column; }
   .tour-callout { flex-basis: auto; max-width: 290px; font-size: .65rem; }
   .tour-callout::before { display: none; }
