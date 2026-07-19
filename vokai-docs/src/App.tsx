@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PremiumPrebook } from "@/components/PremiumPrebook";
 import learningChoiceImage from "../vokai-docs-images/vokai-before-learning-qna-whatareyoulearning.png";
 import experienceImage from "../vokai-docs-images/vokai-before-learning-howmuchdoyouknow.png";
 import scheduleImage from "../vokai-docs-images/vokai-protechyourtime-afterlogin-qna.png";
@@ -58,6 +59,7 @@ const learnerNavigation: NavItem[] = [
   { id: "daily-journey", label: "Your daily journey", icon: Target },
   { id: "coach", label: "Focus Coach", icon: Bot },
   { id: "progress", label: "Progress & garden", icon: Sprout },
+  { id: "premium", label: "Premium pre-booking", icon: Sparkles },
   { id: "insights", label: "Focus insights · planned", icon: Timer },
   { id: "desktop", label: "Desktop companion · planned", icon: Laptop },
   { id: "privacy", label: "Privacy & control", icon: ShieldCheck },
@@ -82,6 +84,12 @@ const migrations = [
   "007_add_vokai_language_and_routine.sql",
   "008_add_vokai_syllabus.sql",
   "009_add_vokai_routine_note.sql",
+  "010_add_vokai_friendships.sql",
+  "011_add_vokai_user_codes.sql",
+  "012_add_vokai_profile_images.sql",
+  "013_add_vokai_rewards.sql",
+  "014_add_vokai_premium_prebookings.sql",
+  "015_store_only_paid_premium_prebookings.sql",
 ];
 
 const heroVideoUrl = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260324_151826_c7218672-6e92-402c-9e45-f1e0f454bdc4.mp4";
@@ -484,6 +492,8 @@ function App() {
 
           <ProductTour />
 
+          <PremiumPrebook />
+
           <section id="daily-journey" className="scroll-mt-24 border-b border-stone-200 py-16">
             <SectionTitle eyebrow="01 · Your daily journey" title="A gentle loop for making progress, even on busy days.">VOKAI is designed around the moments when you need to decide what to do with the next 10, 20, or 45 minutes—not around an ideal schedule you can never keep.</SectionTitle>
             <div className="grid gap-4 md:grid-cols-3">
@@ -538,14 +548,14 @@ function App() {
           </section>
 
           <section id="database" className="scroll-mt-24 border-b border-stone-200 py-16">
-            <SectionTitle eyebrow="Developer · Data" title="Configure Supabase in the right order.">Enable Email and Google authentication, then apply all nine SQL files in Supabase SQL Editor. The API validates the schema at startup and exits if required tables or profile columns are missing.</SectionTitle>
-            <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><div className="rounded-2xl border border-stone-200 bg-white p-5"><h3 className="font-semibold text-vokai-ink">SQL migration order</h3><div className="mt-4 space-y-2">{migrations.map((migration, index) => <div key={migration} className="flex items-center gap-3 rounded-xl bg-stone-50 px-3 py-2 font-mono text-xs text-stone-600"><span className="grid size-5 place-items-center rounded-full bg-vokai-moss font-sans text-[10px] font-bold text-vokai-forest">{index + 1}</span>{migration}</div>)}</div></div><div className="space-y-4"><div className="rounded-2xl bg-vokai-ink p-5 text-white"><KeyRound className="size-5 text-[#BEDFBA]" /><h3 className="mt-4 font-semibold">Required server variables</h3><p className="mt-2 text-sm leading-6 text-stone-300"><code>DIRECT_URL</code>, <code>DATABASE_URL</code>, <code>SUPABASE_URL</code>, and <code>SUPABASE_PUBLISHABLE_KEY</code>. Add <code>GEMINI_API_KEY</code> to enable Focus Coach replies.</p></div><CodeBlock title="Start FastAPI locally" code={"cd vokai-server\npython3 -m venv .venv\nsource .venv/bin/activate\npip install -r requirements.txt\nfastapi dev app/main.py --host 0.0.0.0 --port 8000"} /></div></div>
+            <SectionTitle eyebrow="Developer · Data" title="Configure Supabase in the right order.">Enable Email and Google authentication, then apply every SQL file in Supabase SQL Editor. The API validates the schema at startup and exits if required tables or profile columns are missing.</SectionTitle>
+            <div className="grid gap-5 lg:grid-cols-[1.1fr_.9fr]"><div className="rounded-2xl border border-stone-200 bg-white p-5"><h3 className="font-semibold text-vokai-ink">SQL migration order</h3><div className="mt-4 space-y-2">{migrations.map((migration, index) => <div key={migration} className="flex items-center gap-3 rounded-xl bg-stone-50 px-3 py-2 font-mono text-xs text-stone-600"><span className="grid size-5 place-items-center rounded-full bg-vokai-moss font-sans text-[10px] font-bold text-vokai-forest">{index + 1}</span>{migration}</div>)}</div></div><div className="space-y-4"><div className="rounded-2xl bg-vokai-ink p-5 text-white"><KeyRound className="size-5 text-[#BEDFBA]" /><h3 className="mt-4 font-semibold">Required server variables</h3><p className="mt-2 text-sm leading-6 text-stone-300"><code>DIRECT_URL</code>, <code>DATABASE_URL</code>, <code>SUPABASE_URL</code>, and <code>SUPABASE_PUBLISHABLE_KEY</code>. Add <code>GEMINI_API_KEY</code> for Focus Coach and the server-only <code>DODO_PAYMENTS_API_KEY</code>, product IDs, webhook key, and return URL for Premium.</p></div><CodeBlock title="Start FastAPI locally" code={"cd vokai-server\npython3 -m venv .venv\nsource .venv/bin/activate\npip install -r requirements.txt\nfastapi dev app/main.py --host 0.0.0.0 --port 8000"} /></div></div>
           </section>
 
           <section id="api" className="scroll-mt-24 py-16">
             <SectionTitle eyebrow="Developer · API" title="Account-aware endpoints for the VOKAI journey.">Protected endpoints require <code>Authorization: Bearer &lt;supabase-access-token&gt;</code>. The running API exposes full request and response schemas at <code>/docs</code>.</SectionTitle>
             <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white"><div className="grid grid-cols-[88px_1fr] border-b border-stone-200 bg-stone-50 px-4 py-2 text-[11px] font-bold tracking-wider text-stone-400 uppercase"><span>Method</span><span>Endpoint</span></div>{[
-              ["GET", "/vokai/auth/config"], ["GET", "/vokai/bootstrap"], ["PUT", "/vokai/profile"], ["GET", "/vokai/garden"], ["GET", "/vokai/check-ins/today"], ["PUT", "/vokai/check-ins"], ["GET", "/vokai/syllabus"], ["POST", "/vokai/syllabus/generate"], ["PUT", "/vokai/syllabus/topics"], ["POST", "/vokai/focus/coach"], ["DELETE", "/vokai/journey"],
+              ["GET", "/vokai/auth/config"], ["GET", "/vokai/bootstrap"], ["PUT", "/vokai/profile"], ["GET", "/vokai/garden"], ["GET", "/vokai/check-ins/today"], ["PUT", "/vokai/check-ins"], ["GET", "/vokai/syllabus"], ["POST", "/vokai/syllabus/generate"], ["PUT", "/vokai/syllabus/topics"], ["POST", "/vokai/focus/coach"], ["GET", "/vokai/premium/plans"], ["POST", "/vokai/premium/prebook"], ["POST", "/vokai/premium/checkout"], ["GET", "/vokai/premium/status"], ["DELETE", "/vokai/journey"],
             ].map(([method, endpoint]) => <div key={endpoint} className="grid grid-cols-[88px_1fr] border-b border-stone-100 px-4 py-3 last:border-b-0"><span className={`w-fit rounded px-1.5 py-0.5 text-[10px] font-bold ${method === "GET" ? "bg-blue-50 text-blue-700" : method === "POST" ? "bg-emerald-50 text-emerald-700" : method === "PUT" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>{method}</span><code className="text-sm text-stone-700">{endpoint}</code></div>)}</div>
           </section>
 
@@ -553,7 +563,8 @@ function App() {
             <SectionTitle eyebrow="Developer · Help" title="Fix common setup issues quickly.">Most startup problems come from running commands in the wrong directory, missing Supabase migrations, or an API URL a phone cannot reach.</SectionTitle>
             <div className="space-y-3">{[
               ["requirements.txt or app/main.py cannot be found", "Run the FastAPI commands from vokai-server, not vokai-client or the repository root."],
-              ["Server asks for SQL migrations", "Open Supabase SQL Editor and apply every migration from 001 through 009 in order."],
+              ["Server asks for SQL migrations", "Open Supabase SQL Editor and apply every migration from 001 through 015 in order."],
+              ["Premium checkout is not ready", "Set the Dodo server API key, product IDs, checkout return URL, and webhook signing key in vokai-server/.env. Set VITE_VOKAI_API_URL for the VOKAI Docs deployment."],
               ["A phone cannot reach the local server", "Set EXPO_PUBLIC_VOKAI_API_URL to your computer’s LAN IP address, not localhost."],
               ["Voice typing is unavailable", "Use a native Android development build, grant microphone access, and ensure a speech-recognition service is enabled on the device."],
               ["Docker command is unavailable", "Install Docker Desktop, then rerun docker compose up --build from the repository root."],

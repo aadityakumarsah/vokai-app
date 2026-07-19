@@ -12,12 +12,12 @@ from time import time
 from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request as UrlRequest, urlopen
 from uuid import UUID, uuid4
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request as FastAPIRequest, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
@@ -50,6 +50,25 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-
 CLOUDINARY_CLOUD_NAME = (os.getenv("CLOUDINARY_CLOUD_NAME") or os.getenv("CLOUDNARY_NAME") or "").strip()
 CLOUDINARY_API_KEY = (os.getenv("CLOUDINARY_API_KEY") or os.getenv("CLOUDNARY_API_KEY") or "").strip()
 CLOUDINARY_API_SECRET = (os.getenv("CLOUDINARY_API_SECRET") or os.getenv("CLOUDNARY_API_SECRET") or "").strip()
+DODO_PAYMENTS_API_KEY = (
+    os.getenv("DODO_PAYMENTS_API_KEY")
+    or os.getenv("DODO_VOKAI_API_KEY")
+    or os.getenv("DODO_Vokai_api_key")
+    or ""
+).strip()
+DODO_PAYMENTS_ENVIRONMENT = os.getenv("DODO_PAYMENTS_ENVIRONMENT", "test_mode").strip() or "test_mode"
+DODO_PAYMENTS_WEBHOOK_KEY = os.getenv("DODO_PAYMENTS_WEBHOOK_KEY", "").strip()
+DODO_CHECKOUT_RETURN_URL = os.getenv("DODO_CHECKOUT_RETURN_URL", "").strip()
+DODO_PRODUCT_IDS = {
+    "weekly": os.getenv("DODO_WEEKLY_PRODUCT_ID", "").strip(),
+    "monthly": os.getenv("DODO_MONTHLY_PRODUCT_ID", "").strip(),
+    "yearly": os.getenv("DODO_YEARLY_PRODUCT_ID", "").strip(),
+}
+PREMIUM_PLANS = {
+    "weekly": {"label": "Weekly", "price": "$3", "period": "week", "description": "A flexible week of VOKAI Premium."},
+    "monthly": {"label": "Monthly", "price": "$10", "period": "month", "description": "A steady month of focused learning support."},
+    "yearly": {"label": "Yearly", "price": "$198", "period": "year", "description": "A full year of VOKAI Premium."},
+}
 MILESTONES = (
     {"day": 1, "key": "pot", "title": "Welcome pot"},
     {"day": 5, "key": "butterfly", "title": "Flowers and bee"},
@@ -60,7 +79,11 @@ MILESTONES = (
     {"day": 90, "key": "frog", "title": "Full bloom frog"},
 )
 TASKS = ("learn", "build", "reflect")
-REQUIRED_TABLES = ("vokai_user_profiles", "vokai_user_checkins", "vokai_user_syllabi", "vokai_friendships", "vokai_checkin_rewards")
+REQUIRED_TABLES = (
+    "vokai_user_profiles", "vokai_user_checkins", "vokai_user_syllabi", "vokai_friendships", "vokai_checkin_rewards",
+    "vokai_premium_prebookings", "vokai_dodo_webhook_events",
+)
+REQUIRED_INDEXES = ("vokai_premium_prebookings_unique_payment",)
 REQUIRED_PROFILE_COLUMNS = {"custom_language", "busy_schedule", "experience_level", "routine_note", "user_code", "profile_image_url", "coins", "points"}
 CHECKIN_REWARDS = {
     2: (10, 5, "Day 2 boost"),
@@ -93,9 +116,17 @@ def verify_database_schema() -> None:
             """SELECT column_name FROM information_schema.columns
                WHERE table_schema = 'public' AND table_name = 'vokai_user_profiles'"""
         ).fetchall()
+        indexes = connection.execute(
+            "SELECT to_regclass('public.' || index_name) AS index_name FROM unnest(%s::text[]) AS index_name",
+            (list(REQUIRED_INDEXES),),
+        ).fetchall()
     found_columns = {row["column_name"] for row in profile_columns}
-    if any(row["table_name"] is None for row in rows) or not REQUIRED_PROFILE_COLUMNS.issubset(found_columns):
-        raise RuntimeError("Run vokai-server/sql/001 through 013 in Supabase SQL Editor before starting VOKAI Server.")
+    if (
+        any(row["table_name"] is None for row in rows)
+        or any(row["index_name"] is None for row in indexes)
+        or not REQUIRED_PROFILE_COLUMNS.issubset(found_columns)
+    ):
+        raise RuntimeError("Run vokai-server/sql/001 through 015 in Supabase SQL Editor before starting VOKAI Server.")
 
 
 @app.on_event("startup")
@@ -116,7 +147,7 @@ def get_current_user(authorization: str | None = Header(default=None)) -> AuthUs
     token = authorization.removeprefix("Bearer ").strip()
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sign in is required.")
-    request = Request(
+    request = UrlRequest(
         f"{SUPABASE_URL}/auth/v1/user",
         headers={"apikey": SUPABASE_PUBLISHABLE_KEY, "Authorization": f"Bearer {token}"},
     )
@@ -186,6 +217,15 @@ class SyllabusTopicUpdateBody(BaseModel):
     completed: bool
 
 
+class PremiumCheckoutBody(BaseModel):
+    plan: Literal["weekly", "monthly", "yearly"]
+
+
+class PremiumPrebookBody(PremiumCheckoutBody):
+    email: str = Field(min_length=3, max_length=320)
+    name: str = Field(min_length=1, max_length=80)
+
+
 def serialise_datetime(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
@@ -232,7 +272,7 @@ def cloudinary_profile_image_url(user_id: str, image_bytes: bytes, content_type:
     body.extend(image_bytes)
     body.extend(b"\r\n")
     body.extend(f"--{boundary}--\r\n".encode("utf-8"))
-    request = Request(
+    request = UrlRequest(
         f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload",
         data=bytes(body),
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
@@ -432,6 +472,257 @@ def snapshot(user_id: str, local_date: date) -> dict:
     }
 
 
+def premium_plans() -> list[dict]:
+    """Expose display data only; Dodo product IDs remain server-side."""
+    checkout_ready = bool(DODO_PAYMENTS_API_KEY and DODO_CHECKOUT_RETURN_URL)
+    return [
+        {"id": plan_id, **plan, "checkout_ready": checkout_ready and bool(DODO_PRODUCT_IDS[plan_id])}
+        for plan_id, plan in PREMIUM_PLANS.items()
+    ]
+
+
+def clean_customer_email(value: str) -> str:
+    email = value.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enter a valid email address.")
+    return email
+
+
+def dodo_return_url() -> str:
+    parsed = urlparse(DODO_CHECKOUT_RETURN_URL)
+    if parsed.scheme not in {"https", "http"} or not parsed.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Premium checkout is not configured yet. Set DODO_CHECKOUT_RETURN_URL on the server.",
+        )
+    return DODO_CHECKOUT_RETURN_URL
+
+
+def dodo_client(*, require_webhook_key: bool = False):
+    if not DODO_PAYMENTS_API_KEY:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Premium checkout is not configured yet.")
+    if DODO_PAYMENTS_ENVIRONMENT not in {"test_mode", "live_mode"}:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Premium checkout has an invalid server configuration.")
+    if require_webhook_key and not DODO_PAYMENTS_WEBHOOK_KEY:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Premium webhook verification is not configured yet.")
+    try:
+        from dodopayments import DodoPayments
+    except ImportError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Premium checkout is temporarily unavailable.") from None
+    return DodoPayments(
+        bearer_token=DODO_PAYMENTS_API_KEY,
+        webhook_key=DODO_PAYMENTS_WEBHOOK_KEY or None,
+        environment=DODO_PAYMENTS_ENVIRONMENT,
+    )
+
+
+def create_dodo_premium_checkout(
+    *,
+    plan: Literal["weekly", "monthly", "yearly"],
+    email: str,
+    name: str,
+    source: Literal["docs_prebook", "app_checkout"],
+    user_id: str | None = None,
+) -> dict:
+    product_id = DODO_PRODUCT_IDS[plan]
+    if not product_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="That Premium plan is not configured yet.")
+    return_url = dodo_return_url()
+    # Do not persist contact details yet. Dodo returns them in the signed
+    # payment.succeeded webhook, which is the only point that creates a row.
+    metadata = {"vokai_plan": plan, "vokai_source": source}
+    if user_id:
+        metadata["vokai_user_id"] = user_id
+    try:
+        session = dodo_client().checkout_sessions.create(
+            product_cart=[{"product_id": product_id, "quantity": 1}],
+            customer={"email": email, "name": name},
+            metadata=metadata,
+            return_url=return_url,
+        )
+        checkout_url = getattr(session, "checkout_url", None) or getattr(session, "url", None)
+        session_id = getattr(session, "session_id", None) or getattr(session, "id", None)
+        payment_id = getattr(session, "payment_id", None)
+        if not isinstance(checkout_url, str) or not checkout_url.startswith("https://"):
+            raise ValueError("Dodo did not return a secure checkout URL")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Could not start Premium checkout. Please try again.") from None
+    return {"checkout_url": checkout_url, "plan": plan, "checkout_session_id": str(session_id) if session_id else None, "payment_id": str(payment_id) if payment_id else None}
+
+
+def premium_status_for_user(user_id: str) -> dict:
+    with get_connection() as connection:
+        row = connection.execute(
+            """SELECT plan, status, created_at, updated_at
+               FROM public.vokai_premium_prebookings
+               WHERE user_id = %s
+               ORDER BY updated_at DESC, created_at DESC
+               LIMIT 1""",
+            (user_id,),
+        ).fetchone()
+    if row is None:
+        return {"is_premium": False, "plan": None, "status": "not_started", "updated_at": None}
+    premium_statuses = {"active", "payment_succeeded", "subscription_renewed"}
+    return {
+        "is_premium": row["status"] in premium_statuses,
+        "plan": row["plan"],
+        "status": row["status"],
+        "updated_at": serialise_datetime(row["updated_at"]),
+    }
+
+
+def dodo_data_containers(payload: dict) -> list[dict]:
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return []
+    candidates = [data, data.get("object"), data.get("checkout_session"), data.get("payment"), data.get("subscription")]
+    return [candidate for candidate in candidates if isinstance(candidate, dict)]
+
+
+def dodo_metadata(payload: dict) -> dict:
+    for candidate in dodo_data_containers(payload):
+        if isinstance(candidate.get("metadata"), dict):
+            return candidate["metadata"]
+    return {}
+
+
+def dodo_data_identifier(payload: dict, key: str) -> str | None:
+    for candidate in dodo_data_containers(payload):
+        if candidate.get(key) is not None:
+            return str(candidate[key])
+    return None
+
+
+def dodo_customer_details(payload: dict) -> tuple[str, str] | None:
+    for candidate in dodo_data_containers(payload):
+        customer = candidate.get("customer")
+        if not isinstance(customer, dict):
+            continue
+        email = str(customer.get("email") or "").strip().lower()
+        name = str(customer.get("name") or "").strip()
+        if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) and name:
+            return email, name[:80]
+    return None
+
+
+def dodo_metadata_user_id(metadata: dict) -> str | None:
+    try:
+        return str(UUID(str(metadata.get("vokai_user_id"))))
+    except (TypeError, ValueError):
+        return None
+
+
+def dodo_webhook_audit_payload(payload: dict) -> dict:
+    """Keep idempotency records useful without retaining customer contact data."""
+    data = payload.get("data")
+    return {
+        "type": str(payload.get("type") or "unknown"),
+        "timestamp": payload.get("timestamp"),
+        "data": {
+            "payload_type": data.get("payload_type") if isinstance(data, dict) else None,
+            "payment_id": dodo_data_identifier(payload, "payment_id"),
+            "subscription_id": dodo_data_identifier(payload, "subscription_id"),
+            "checkout_session_id": dodo_data_identifier(payload, "checkout_session_id"),
+        },
+    }
+
+
+def premium_status_for_dodo_event(event_type: str) -> str:
+    return {
+        "payment.succeeded": "payment_succeeded",
+        "payment.failed": "payment_failed",
+        "payment.cancelled": "payment_cancelled",
+        "checkout.session.completed": "checkout_completed",
+        "subscription.active": "active",
+        "subscription.updated": "subscription_updated",
+        "subscription.renewed": "subscription_renewed",
+        "subscription.failed": "subscription_failed",
+        "subscription.cancelled": "cancelled",
+        "subscription.expired": "expired",
+        "subscription.on_hold": "on_hold",
+    }.get(event_type, "event_received")
+
+
+def record_dodo_webhook(payload: dict, webhook_id: str) -> bool:
+    event_type = str(payload.get("type") or "unknown")[:100]
+    metadata = dodo_metadata(payload)
+    plan = metadata.get("vokai_plan")
+    source = metadata.get("vokai_source")
+    customer = dodo_customer_details(payload)
+    payment_id = dodo_data_identifier(payload, "payment_id")
+    checkout_session_id = dodo_data_identifier(payload, "checkout_session_id")
+    subscription_id = dodo_data_identifier(payload, "subscription_id")
+    with get_connection() as connection:
+        inserted = connection.execute(
+            """INSERT INTO public.vokai_dodo_webhook_events (event_id, event_type, payload)
+               VALUES (%s, %s, %s::jsonb)
+               ON CONFLICT (event_id) DO NOTHING
+               RETURNING event_id""",
+            (webhook_id, event_type, json.dumps(dodo_webhook_audit_payload(payload))),
+        ).fetchone()
+        if inserted is None:
+            return False
+        if event_type == "payment.succeeded" and customer and payment_id and plan in PREMIUM_PLANS and source in {"docs_prebook", "app_checkout"}:
+            user_id = dodo_metadata_user_id(metadata)
+            if user_id:
+                linked_profile = connection.execute(
+                    "SELECT 1 FROM public.vokai_user_profiles WHERE user_id = %s",
+                    (user_id,),
+                ).fetchone()
+                if linked_profile is None:
+                    user_id = None
+            connection.execute(
+                """INSERT INTO public.vokai_premium_prebookings
+                   (user_id, email, name, plan, source, status, dodo_checkout_session_id, dodo_payment_id, dodo_subscription_id, last_webhook_event_id, last_webhook_payload)
+                   VALUES (%s, %s, %s, %s, %s, 'payment_succeeded', %s, %s, %s, %s, %s::jsonb)
+                   ON CONFLICT (dodo_payment_id) WHERE dodo_payment_id IS NOT NULL DO UPDATE SET
+                     status = 'payment_succeeded',
+                     dodo_checkout_session_id = COALESCE(EXCLUDED.dodo_checkout_session_id, vokai_premium_prebookings.dodo_checkout_session_id),
+                     dodo_subscription_id = COALESCE(EXCLUDED.dodo_subscription_id, vokai_premium_prebookings.dodo_subscription_id),
+                     last_webhook_event_id = EXCLUDED.last_webhook_event_id,
+                     last_webhook_payload = EXCLUDED.last_webhook_payload,
+                     updated_at = NOW()""",
+                (
+                    user_id,
+                    customer[0],
+                    customer[1],
+                    plan,
+                    source,
+                    checkout_session_id,
+                    payment_id,
+                    subscription_id,
+                    webhook_id,
+                    json.dumps(payload),
+                ),
+            )
+        elif payment_id or subscription_id or checkout_session_id:
+            connection.execute(
+                """UPDATE public.vokai_premium_prebookings
+                   SET status = %s,
+                       dodo_payment_id = COALESCE(%s, dodo_payment_id),
+                       dodo_subscription_id = COALESCE(%s, dodo_subscription_id),
+                       last_webhook_event_id = %s,
+                       last_webhook_payload = %s::jsonb,
+                       updated_at = NOW()
+                   WHERE dodo_payment_id = %s
+                      OR dodo_subscription_id = %s
+                      OR dodo_checkout_session_id = %s""",
+                (
+                    premium_status_for_dodo_event(event_type),
+                    payment_id,
+                    subscription_id,
+                    webhook_id,
+                    json.dumps(payload),
+                    payment_id,
+                    subscription_id,
+                    checkout_session_id,
+                ),
+            )
+    return True
+
+
 LANGUAGE_DOCUMENTATION = {
     "JavaScript": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide",
     "Python": "https://docs.python.org/3/tutorial/",
@@ -580,7 +871,7 @@ def gemini_reply(
         request_payload["tools"] = [{"google_search": {}}]
     request_body = json.dumps(request_payload).encode("utf-8")
     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?{urlencode({'key': GEMINI_API_KEY})}"
-    request = Request(endpoint, data=request_body, headers={"Content-Type": "application/json"}, method="POST")
+    request = UrlRequest(endpoint, data=request_body, headers={"Content-Type": "application/json"}, method="POST")
     try:
         with urlopen(request, timeout=60 if max_output_tokens > 2_000 else 25) as response:
             payload = json.loads(response.read().decode("utf-8"))
@@ -641,6 +932,77 @@ Give practical, specific advice that fits the learner's remaining task and time.
 def auth_config() -> dict:
     """Only public Supabase values are sent to the mobile client."""
     return {"success": True, "data": {"url": SUPABASE_URL, "publishable_key": SUPABASE_PUBLISHABLE_KEY}}
+
+
+@app.get("/vokai/premium/plans")
+def get_premium_plans() -> dict:
+    """Public pricing copy for VOKAI Docs; product IDs and keys never leave the server."""
+    return {"success": True, "data": {"plans": premium_plans()}}
+
+
+@app.post("/vokai/premium/prebook")
+def prebook_premium(body: PremiumPrebookBody) -> dict:
+    """Start a hosted Dodo checkout from the public VOKAI Docs pre-booking form."""
+    email = clean_customer_email(body.email)
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enter your name to continue.")
+    checkout = create_dodo_premium_checkout(
+        plan=body.plan,
+        email=email,
+        name=name,
+        source="docs_prebook",
+    )
+    return {"success": True, "data": checkout}
+
+
+@app.post("/vokai/premium/checkout")
+def checkout_premium(body: PremiumCheckoutBody, user: AuthUser = Depends(get_current_user)) -> dict:
+    """Start a Dodo checkout for the signed-in VOKAI learner."""
+    profile = profile_for(user.id)
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Finish setting up your learning profile before starting Premium checkout.")
+    email = clean_customer_email(user.email)
+    checkout = create_dodo_premium_checkout(
+        plan=body.plan,
+        email=email,
+        name=str(profile["name"]).strip() or user.full_name or "VOKAI learner",
+        source="app_checkout",
+        user_id=user.id,
+    )
+    return {"success": True, "data": checkout}
+
+
+@app.get("/vokai/premium/status")
+def get_premium_status(user: AuthUser = Depends(get_current_user)) -> dict:
+    return {"success": True, "data": premium_status_for_user(user.id)}
+
+
+@app.post("/vokai/premium/webhooks/dodo", include_in_schema=False)
+async def dodo_webhook(request: FastAPIRequest) -> dict:
+    """Accept only signature-verified Dodo webhook events, then persist them idempotently."""
+    raw_body = await request.body()
+    try:
+        payload_text = raw_body.decode("utf-8")
+        payload = json.loads(payload_text)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook payload.") from None
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook payload.")
+    headers = {
+        "webhook-id": request.headers.get("webhook-id", ""),
+        "webhook-signature": request.headers.get("webhook-signature", ""),
+        "webhook-timestamp": request.headers.get("webhook-timestamp", ""),
+    }
+    if not all(headers.values()):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing Dodo webhook signature.")
+    try:
+        dodo_client(require_webhook_key=True).webhooks.unwrap(payload_text, headers=headers)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Dodo webhook signature.") from None
+    return {"received": True, "duplicate": not record_dodo_webhook(payload, headers["webhook-id"])}
 
 
 @app.post("/vokai/focus/coach")

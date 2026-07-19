@@ -31,8 +31,9 @@ vokai-app/
 │   └── ios/             Generated iOS development project
 ├── vokai-server/       FastAPI backend
 │   ├── app/             API implementation
-│   └── sql/             Supabase schema migrations (001–012)
+│   └── sql/             Supabase schema migrations (001–015)
 ├── compose.yaml         Docker Compose setup for server and web client
+├── render.yaml          Render Blueprint for the public FastAPI service
 └── README.md
 ```
 
@@ -113,6 +114,9 @@ vokai-server/sql/009_add_vokai_routine_note.sql
 vokai-server/sql/010_add_vokai_friendships.sql
 vokai-server/sql/011_add_vokai_user_codes.sql
 vokai-server/sql/012_add_vokai_profile_images.sql
+vokai-server/sql/013_add_vokai_rewards.sql
+vokai-server/sql/014_add_vokai_premium_prebookings.sql
+vokai-server/sql/015_store_only_paid_premium_prebookings.sql
 ```
 
 The server checks these tables and required profile columns during startup. It intentionally stops if the schema is incomplete.
@@ -138,6 +142,23 @@ EXPO_PUBLIC_VOKAI_API_URL=http://192.168.1.10:8000 docker compose up --build
 ```
 
 For a browser opened on the same computer, the default `http://localhost:8000` is normally correct. For a phone, use the computer’s LAN IP and ensure the phone and computer are on the same network.
+
+## Deploy the FastAPI server to Render with Docker
+
+Use the root [render.yaml](render.yaml) Blueprint. It builds
+`vokai-server/Dockerfile`, uses Render's runtime port, and waits for `GET
+/health` before marking the deploy ready.
+
+1. Push this repository to GitHub.
+2. In Render choose **New → Blueprint**, then select the repository.
+3. Enter the prompted values from `vokai-server/.env` in the Render Dashboard.
+   Keep the local `.env` file and all secrets out of Git.
+4. Set `ALLOWED_ORIGINS` to your deployed Docs origin and deploy.
+5. Set Vercel's `VITE_VOKAI_API_URL` to the resulting Render URL, then redeploy
+   VOKAI Docs.
+
+For Dodo, use the Render URL with `/vokai/premium/webhooks/dodo` as the webhook
+endpoint and add Dodo's signing secret to `DODO_PAYMENTS_WEBHOOK_KEY` in Render.
 
 ## Local server setup without Docker
 
@@ -242,6 +263,10 @@ Protected endpoints require `Authorization: Bearer <supabase-access-token>`.
 | `CLOUDINARY_API_KEY` | For profile photos | Cloudinary API key, configured only on the server |
 | `CLOUDINARY_API_SECRET` | For profile photos | Cloudinary API secret, configured only on the server |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins; defaults to `*` |
+| `DODO_PAYMENTS_API_KEY` | For Premium | Dodo secret API key, server-only |
+| `DODO_PAYMENTS_WEBHOOK_KEY` | For Premium records | Signing secret from the Dodo webhook |
+| `DODO_WEEKLY_PRODUCT_ID`, `DODO_MONTHLY_PRODUCT_ID`, `DODO_YEARLY_PRODUCT_ID` | For Premium | Dodo product IDs for the three plans |
+| `DODO_CHECKOUT_RETURN_URL` | For Premium | Public Docs URL to return to after checkout |
 
 ### Client: `vokai-client/.env`
 
@@ -279,9 +304,9 @@ npx expo export --platform web
 
 Run the server commands from `vokai-server`, not `vokai-client`.
 
-**The server exits with “Run vokai-server/sql/001 through 012”**
+**The server exits with “Run vokai-server/sql/001 through 015”**
 
-The Supabase schema is incomplete. Run all twelve SQL migrations in order.
+The Supabase schema is incomplete. Run all fifteen SQL migrations in order.
 
 **The mobile app cannot reach the server**
 

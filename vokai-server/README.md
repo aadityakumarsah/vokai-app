@@ -22,6 +22,8 @@ idempotent, so rerunning them is safe:
 11. `sql/011_add_vokai_user_codes.sql`
 12. `sql/012_add_vokai_profile_images.sql`
 13. `sql/013_add_vokai_rewards.sql`
+14. `sql/014_add_vokai_premium_prebookings.sql`
+15. `sql/015_store_only_paid_premium_prebookings.sql`
 
 The tables are keyed by `auth.users.id`, not a phone/device ID. RLS policies
 allow only the signed-in owner to access their own profile and check-ins. The
@@ -69,6 +71,31 @@ source .venv/bin/activate
 pip install -r requirements.txt
 fastapi dev app/main.py --host 0.0.0.0 --port 8000
 ```
+
+## Deploy the Docker server to Render
+
+This repository includes a root-level `render.yaml` Blueprint for the FastAPI
+server. It uses `vokai-server/Dockerfile`, listens on Render's assigned `PORT`,
+and checks `/health` before accepting traffic.
+
+1. Push the repository to GitHub.
+2. In Render, select **New → Blueprint** and select this repository.
+3. Render reads `render.yaml` and prompts for the server values. Copy values
+   from your local `vokai-server/.env`; do not commit that file.
+4. Set `ALLOWED_ORIGINS` to the public Docs origin, for example
+   `https://docs-vokai.vercel.app`.
+5. After deploy, open `https://<render-service>.onrender.com/health`.
+
+For Dodo Premium, set `DODO_CHECKOUT_RETURN_URL` to the public Docs URL and
+then create the Dodo webhook at:
+
+```text
+https://<render-service>.onrender.com/vokai/premium/webhooks/dodo
+```
+
+Copy its signing secret into `DODO_PAYMENTS_WEBHOOK_KEY` in Render, then deploy
+again. Dodo contact details are only stored after the signed `payment.succeeded`
+event reaches this endpoint.
 
 ## Enable authentication
 

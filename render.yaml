@@ -1,0 +1,42 @@
+services:
+  - type: web
+    runtime: docker
+    name: vokai-server
+    dockerContext: ./vokai-server
+    dockerfilePath: ./vokai-server/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Render injects PORT automatically. Values below are prompted for during
+      # the first Blueprint deploy and are never stored in this repository.
+      - key: DIRECT_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: DODO_PAYMENTS_API_KEY
+        sync: false
+      - key: DODO_PAYMENTS_WEBHOOK_KEY
+        sync: false
+      - key: DODO_WEEKLY_PRODUCT_ID
+        sync: false
+      - key: DODO_MONTHLY_PRODUCT_ID
+        sync: false
+      - key: DODO_YEARLY_PRODUCT_ID
+        sync: false
+      - key: DODO_CHECKOUT_RETURN_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DODO_PAYMENTS_ENVIRONMENT
+        value: test_mode
