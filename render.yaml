@@ -39,4 +39,6 @@ services:
       - key: ALLOWED_ORIGINS
         sync: false
       - key: DODO_PAYMENTS_ENVIRONMENT
-        value: test_mode
+        # Keep the mode in Render's secret settings so production deploys do
+        # not overwrite a deliberate test_mode/live_mode choice.
+        sync: false
