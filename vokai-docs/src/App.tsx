@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
@@ -85,6 +85,8 @@ const migrations = [
 ];
 
 const heroVideoUrl = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260324_151826_c7218672-6e92-402c-9e45-f1e0f454bdc4.mp4";
+// Replace this with VOKAI's published Google Play Store URL before launch.
+const playStoreUrl = "#";
 const bloomPalette = ["#E795A6", "#EEA3B2", "#D77C93", "#F3B0BC", "#E38CA0"];
 
 type TourStep = {
@@ -236,15 +238,20 @@ function App() {
   const bloomLayerRef = useRef<HTMLDivElement>(null);
   const lastTrailPetalAtRef = useRef(0);
   const closeMenu = () => setMenuOpen(false);
-  const activateHeroSound = () => {
+  const attemptHeroPlayback = () => {
     const video = heroVideoRef.current;
     if (!video || heroSoundEnabled) return;
     video.muted = false;
+    video.volume = 0.8;
     void video.play().then(() => setHeroSoundEnabled(true)).catch(() => {
       video.muted = true;
       void video.play().catch(() => undefined);
     });
   };
+
+  useEffect(() => {
+    attemptHeroPlayback();
+  }, []);
 
   const createCursorBloom = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!bloomLayerRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -399,21 +406,23 @@ function App() {
             <a href="#daily-journey">About</a>
             <a href="#privacy">Contact</a>
           </nav>
-          <a className="landing-journey-button" href="#daily-journey">Begin journey</a>
+          <a className="landing-journey-button" href={playStoreUrl} target="_blank" rel="noreferrer">Begin journey</a>
           <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
             {menuOpen ? <X /> : <Menu />}
           </Button>
         </div>
       </header>
 
-      <section ref={heroSectionRef} id="start" className="docs-hero" onPointerDown={activateHeroSound}>
-        <video ref={heroVideoRef} className="docs-hero-video" autoPlay loop playsInline controls={false} muted={!heroSoundEnabled} preload="auto" disablePictureInPicture disableRemotePlayback aria-hidden="true">
+      <section ref={heroSectionRef} id="start" className="docs-hero" onPointerDown={attemptHeroPlayback}>
+        <video ref={heroVideoRef} className="docs-hero-video" loop playsInline controls={false} muted={!heroSoundEnabled} preload="auto" disablePictureInPicture disableRemotePlayback aria-hidden="true">
           <source src={heroVideoUrl} type="video/mp4" />
         </video>
         <div className="docs-hero-scrim" aria-hidden="true" />
         <div ref={heroContentRef} className="docs-hero-content">
-          <h1>Make room for <span>coding.</span></h1>
-          <p>AI-powered guidance for the coding life you already have. Choose a focused next step, learn steadily, and make every session count.</p>
+          <div className="docs-hero-copy">
+            <h1>Make room for <span>coding.</span></h1>
+            <p>AI-powered guidance for the coding life you already have. Choose a focused next step, learn steadily, and make every session count.</p>
+          </div>
           <a className="landing-hero-cta" href="#daily-journey"><Play className="size-4 fill-current" /> Begin journey</a>
         </div>
         <a className="landing-scroll-cue" href="#guide" aria-label="Scroll to the VOKAI guide"><ChevronDown /></a>
