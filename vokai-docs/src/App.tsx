@@ -4,6 +4,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   AlertCircle,
   ArrowRight,
+  ArrowUp,
   Bot,
   Box,
   Check,
@@ -242,10 +243,11 @@ function NavLinks({ items }: { items: NavItem[] }) {
 }
 
 function App() {
-  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(true);
   const [heroSoundEnabled, setHeroSoundEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [appStoreComingSoon, setAppStoreComingSoon] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const heroSectionRef = useRef<HTMLElement>(null);
   const heroContentRef = useRef<HTMLDivElement>(null);
@@ -255,6 +257,9 @@ function App() {
   const navigateToPremium = () => {
     window.history.pushState({}, "", "#premium");
     window.requestAnimationFrame(() => document.getElementById("premium")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const attemptHeroPlayback = () => {
     const video = heroVideoRef.current;
@@ -266,6 +271,14 @@ function App() {
       void video.play().catch(() => undefined);
     });
   };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     attemptHeroPlayback();
@@ -381,7 +394,7 @@ function App() {
     const context = gsap.context(() => {
       const guideSections = guide.querySelectorAll("main > section");
 
-      gsap.set(guide, { xPercent: 18 });
+      gsap.set(guide, { yPercent: 8 });
 
       gsap.timeline({
         scrollTrigger: {
@@ -397,7 +410,7 @@ function App() {
       }, 0);
 
       gsap.to(guide, {
-        xPercent: 0,
+        yPercent: 0,
         ease: "none",
         scrollTrigger: {
           trigger: guide,
@@ -409,7 +422,7 @@ function App() {
 
       gsap.from(guideSections, {
         autoAlpha: 0,
-        x: 56,
+        y: 40,
         duration: 0.75,
         stagger: 0.1,
         ease: "power3.out",
@@ -489,9 +502,8 @@ function App() {
           <section id="guide" className="scroll-mt-6 border-b border-stone-200 pb-16">
             <div className="mb-10 flex items-center justify-between gap-4 border-b border-stone-200 pb-4">
               <div><p className="text-[11px] font-bold tracking-[0.16em] text-vokai-forest uppercase">The VOKAI guide</p><p className="mt-1 text-sm text-stone-500">Everything you need to build a steady coding rhythm.</p></div>
-              <Button variant="outline" size="sm" className="hidden shrink-0 lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden}>
+              <Button variant="outline" size="icon" className="hidden lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden} aria-label={sidebarHidden ? "Show guide" : "Hide guide"}>
                 {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
-                {sidebarHidden ? "Show guide" : "Hide guide"}
               </Button>
             </div>
             <SectionTitle eyebrow="Start here" title="Build a calm, consistent coding practice.">VOKAI turns a vague goal into one clear, manageable next step each day—so practice can fit around the rest of your life.</SectionTitle>
@@ -586,6 +598,16 @@ function App() {
           <footer className="border-t border-stone-200 py-8 text-sm text-stone-500">Built for steady progress, not perfect streaks. <a href="https://github.com/aadityakumarsah/vokai-app" className="font-medium text-vokai-forest hover:underline">View VOKAI on GitHub</a>.</footer>
         </main>
       </div>
+
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-6 right-6 z-50 flex size-12 items-center justify-center rounded-full bg-vokai-forest text-white shadow-lg transition-all duration-300 hover:scale-110 hover:bg-vokai-forest/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vokai-forest focus-visible:ring-offset-2 ${
+          showScrollTop ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-8 opacity-0"
+        }`}
+        aria-label="Scroll to top"
+      >
+        <ArrowUp className="size-5" />
+      </button>
     </div>
   );
 }
