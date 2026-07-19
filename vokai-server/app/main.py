@@ -23,7 +23,11 @@ from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
 SERVER_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(SERVER_DIR / ".env")
+# Local development should use the values the developer intentionally placed in
+# vokai-server/.env, even if an older terminal session exported an empty value.
+# Render has no .env file in the image, so its secret environment variables stay
+# authoritative in production.
+load_dotenv(SERVER_DIR / ".env", override=True)
 
 DATABASE_URL = os.getenv("DIRECT_URL") or os.getenv("DATABASE_URL")
 SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY") or os.getenv("SUPABASE_Publishable_KEY")
@@ -93,10 +97,24 @@ CHECKIN_REWARDS = {
     60: (200, 100, "Day 60 legend reward"),
 }
 
+OFFICIAL_DOCS_ORIGIN = "https://docs-vokai.vercel.app"
+
+
+def cors_origins() -> list[str]:
+    configured = [origin.strip().rstrip("/") for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()]
+    if not configured or "*" in configured:
+        return ["*"]
+    # The public VOKAI Docs client is a first-party consumer of this API. Keep
+    # it available even if Render's environment was saved with an older origin.
+    if OFFICIAL_DOCS_ORIGIN not in configured:
+        configured.append(OFFICIAL_DOCS_ORIGIN)
+    return configured
+
+
 app = FastAPI(title="VOKAI Server", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")],
+    allow_origins=cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -547,7 +565,14 @@ def create_dodo_premium_checkout(
             raise ValueError("Dodo did not return a secure checkout URL")
     except HTTPException:
         raise
-    except Exception:
+    except Exception as error:
+        # This is safe to expose: it tells an administrator what to repair
+        # without leaking Dodo's response body, credentials, or product IDs.
+        if error.__class__.__name__ == "AuthenticationError":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Premium checkout is not configured yet. Set a valid Dodo API key for the server's current payment mode.",
+            ) from None
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Could not start Premium checkout. Please try again.") from None
     return {"checkout_url": checkout_url, "plan": plan, "checkout_session_id": str(session_id) if session_id else None, "payment_id": str(payment_id) if payment_id else None}
 
