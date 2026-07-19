@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { ArrowRight, Check, Crown, LoaderCircle, ShieldCheck } from "lucide-react";
 
 type PlanId = "weekly" | "monthly" | "yearly";
@@ -17,6 +17,14 @@ export function PremiumPrebook() {
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [showWakingUpNotice, setShowWakingUpNotice] = useState(false);
+
+  useEffect(() => {
+    if (apiBaseUrl) {
+      // Warm up the server in the background on page load to eliminate Render free-tier spin-up delay
+      fetch(`${apiBaseUrl}/health`).catch(() => {});
+    }
+  }, []);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -26,18 +34,30 @@ export function PremiumPrebook() {
     }
     setSubmitting(true);
     setMessage("");
+    setShowWakingUpNotice(false);
+
+    // If the request takes longer than 1.5 seconds, show a spin-up notice
+    const noticeTimeout = setTimeout(() => {
+      setShowWakingUpNotice(true);
+    }, 1500);
+
     try {
       const response = await fetch(`${apiBaseUrl}/vokai/premium/prebook`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan, name, email }),
       });
+      clearTimeout(noticeTimeout);
+      setShowWakingUpNotice(false);
+
       const payload = await response.json().catch(() => null) as { data?: { checkout_url?: string }; detail?: string } | null;
       if (!response.ok || !payload?.data?.checkout_url) {
         throw new Error(payload?.detail || "We could not start your secure checkout. Please try again.");
       }
       window.location.assign(payload.data.checkout_url);
     } catch (error) {
+      clearTimeout(noticeTimeout);
+      setShowWakingUpNotice(false);
       if (error instanceof TypeError && error.message === "Failed to fetch") {
         setMessage("We could not reach the VOKAI payment server. Start FastAPI on port 8000 locally, or configure VITE_VOKAI_API_URL with a public HTTPS API before deploying Docs.");
       } else {
@@ -87,6 +107,11 @@ export function PremiumPrebook() {
             <label className="mt-3 block text-xs font-semibold text-white/75 sm:mt-4" htmlFor="premium-email">Email address
               <input id="premium-email" value={email} onChange={(event) => setEmail(event.target.value)} required type="email" maxLength={320} autoComplete="email" placeholder="you@example.com" className="mt-1.5 h-10 w-full rounded-xl border border-white/18 bg-white/10 px-3 text-sm text-white outline-none placeholder:text-white/40 transition focus:border-[#F9DEA3] focus:bg-white/[.14] sm:mt-2 sm:h-11" />
             </label>
+            {showWakingUpNotice && (
+              <p className="mt-3 rounded-xl border border-sky-400/30 bg-sky-950/40 px-3 py-2 text-xs leading-5 text-sky-200 sm:mt-4" role="status">
+                Our secure payments server is waking up (Render free tier). This can take 30-40 seconds if it was inactive. Thank you for your patience!
+              </p>
+            )}
             {message && <p className="mt-3 rounded-xl border border-[#F8D7A7]/30 bg-[#7F4D3E]/35 px-3 py-2 text-xs leading-5 text-[#FFE1B3] sm:mt-4" role="status">{message}</p>}
             <button type="submit" disabled={submitting} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F9DEA3] px-4 text-sm font-extrabold text-[#34513E] transition hover:bg-[#FFF0C8] disabled:cursor-wait disabled:opacity-70 sm:mt-5 sm:h-11">
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Crown className="size-4" />} {submitting ? "Opening checkout…" : `Pre-book for ${plans.find((item) => item.id === plan)?.price}`} <ArrowRight className="size-4" />
