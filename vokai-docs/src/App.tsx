@@ -18,7 +18,6 @@ import {
   Laptop,
   Layers3,
   LockKeyhole,
-  Menu,
   Mic,
   PanelLeftClose,
   PanelLeftOpen,
@@ -32,7 +31,6 @@ import {
   Target,
   Terminal,
   Timer,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PremiumPrebook } from "@/components/PremiumPrebook";
@@ -231,11 +229,11 @@ function ProductTour() {
   );
 }
 
-function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate: () => void }) {
+function NavLinks({ items }: { items: NavItem[] }) {
   return (
     <nav className="space-y-1">
       {items.map(({ id, label, icon: Icon }) => (
-        <a key={id} href={`#${id}`} onClick={onNavigate} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-white hover:text-vokai-ink">
+        <a key={id} href={`#${id}`} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-white hover:text-vokai-ink">
           <Icon className="size-4 text-stone-400" /> {label}
         </a>
       ))}
@@ -244,7 +242,6 @@ function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate: () => v
 }
 
 function App() {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [heroSoundEnabled, setHeroSoundEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
@@ -255,10 +252,8 @@ function App() {
   const guideRevealRef = useRef<HTMLDivElement>(null);
   const bloomLayerRef = useRef<HTMLDivElement>(null);
   const lastTrailPetalAtRef = useRef(0);
-  const closeMenu = () => setMenuOpen(false);
   const navigateToPremium = () => {
     window.history.pushState({}, "", "#premium");
-    setMenuOpen(false);
     window.requestAnimationFrame(() => document.getElementById("premium")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
   const attemptHeroPlayback = () => {
@@ -458,12 +453,7 @@ function App() {
             </div>
             </div>
           </div>
-          <div className="landing-mobile-actions">
-            <a className="landing-mobile-prebook" href="#premium" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /><span>Pre-book</span></a>
-            <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
-              {menuOpen ? <X /> : <Menu />}
-            </Button>
-          </div>
+          <a className="landing-mobile-prebook" href="#premium" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /><span>Pre-book</span></a>
         </div>
       </header>
 
@@ -483,16 +473,15 @@ function App() {
       </section>
 
       <div ref={guideRevealRef} className={`docs-guide-shell mx-auto grid max-w-[1440px] ${sidebarHidden ? "lg:grid-cols-1" : "lg:grid-cols-[260px_minmax(0,1fr)]"}`}>
-        <aside id="docs-sidebar" className={`${menuOpen ? "block" : "hidden"} fixed inset-x-0 top-[5.5rem] z-30 max-h-[calc(100dvh-5.5rem)] overflow-y-auto rounded-b-[1.5rem] border-b border-stone-200 bg-[#F8F6F0] p-4 shadow-[0_20px_44px_rgba(36,51,40,.18)] ${sidebarHidden ? "lg:hidden" : "lg:sticky lg:top-0 lg:block lg:h-screen lg:rounded-none lg:border-r lg:border-b-0 lg:px-5 lg:py-8 lg:shadow-none"}`}>
-          <a href="#premium" onClick={closeMenu} className="mb-5 flex items-center justify-between rounded-2xl bg-vokai-ink px-4 py-3 text-sm font-bold text-white lg:hidden"><span className="inline-flex items-center gap-2"><Sparkles className="size-4 text-[#F9DEA3]" /> Pre-book VOKAI Premium</span><ArrowRight className="size-4 text-[#F9DEA3]" /></a>
+        <aside id="docs-sidebar" className={`hidden fixed inset-x-0 top-[5.5rem] z-30 max-h-[calc(100dvh-5.5rem)] overflow-y-auto rounded-b-[1.5rem] border-b border-stone-200 bg-[#F8F6F0] p-4 shadow-[0_20px_44px_rgba(36,51,40,.18)] ${sidebarHidden ? "lg:hidden" : "lg:sticky lg:top-0 lg:block lg:h-screen lg:rounded-none lg:border-r lg:border-b-0 lg:px-5 lg:py-8 lg:shadow-none"}`}>
           <p className="mb-3 px-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">For learners</p>
-          <NavLinks items={learnerNavigation} onNavigate={closeMenu} />
+          <NavLinks items={learnerNavigation} />
           <p className="mb-3 mt-7 px-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">For developers</p>
-          <NavLinks items={developerNavigation} onNavigate={closeMenu} />
+          <NavLinks items={developerNavigation} />
           <div className="mt-8 rounded-2xl bg-vokai-ink p-4 text-white">
             <p className="text-xs font-semibold text-[#B8D6B6]">A note on privacy</p>
             <p className="mt-1 text-sm leading-5 text-stone-200">Your practice should feel supported, never silently watched. Planned insights are opt-in by design.</p>
-            <a href="#privacy" onClick={closeMenu} className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#CBE3C7] hover:text-white">Read privacy principles <ArrowRight className="size-3" /></a>
+            <a href="#privacy" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#CBE3C7] hover:text-white">Read privacy principles <ArrowRight className="size-3" /></a>
           </div>
         </aside>
 
@@ -500,15 +489,10 @@ function App() {
           <section id="guide" className="scroll-mt-6 border-b border-stone-200 pb-16">
             <div className="mb-10 flex items-center justify-between gap-4 border-b border-stone-200 pb-4">
               <div><p className="text-[11px] font-bold tracking-[0.16em] text-vokai-forest uppercase">The VOKAI guide</p><p className="mt-1 text-sm text-stone-500">Everything you need to build a steady coding rhythm.</p></div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button variant="outline" size="sm" className="hidden lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden}>
-                  {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
-                  {sidebarHidden ? "Show guide" : "Hide guide"}
-                </Button>
-                <Button variant="outline" size="sm" className="inline-flex lg:hidden" onClick={() => setMenuOpen(true)} aria-controls="docs-sidebar" aria-expanded={menuOpen}>
-                  <Menu /> Guide
-                </Button>
-              </div>
+              <Button variant="outline" size="sm" className="hidden shrink-0 lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden}>
+                {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
+                {sidebarHidden ? "Show guide" : "Hide guide"}
+              </Button>
             </div>
             <SectionTitle eyebrow="Start here" title="Build a calm, consistent coding practice.">VOKAI turns a vague goal into one clear, manageable next step each day—so practice can fit around the rest of your life.</SectionTitle>
             <div className="mt-12 grid gap-4 md:grid-cols-3">

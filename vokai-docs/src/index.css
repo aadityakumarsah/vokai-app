@@ -17,9 +17,10 @@
 
 @layer base {
   * { @apply border-border outline-ring/50; }
-  html { scroll-behavior: smooth;
+  html { width: 100%; min-width: 0; max-width: 100%; scroll-behavior: smooth;
     @apply font-sans; }
-  body { @apply antialiased bg-background text-foreground; }
+  body { width: 100%; min-width: 0; max-width: 100%; overflow-x: clip; @apply antialiased bg-background text-foreground; }
+  #root { width: 100%; min-width: 0; max-width: 100%; overflow-x: clip; }
   ::selection { @apply bg-vokai-moss text-vokai-ink; }
 }
 
@@ -112,7 +113,10 @@
 }
 
 .docs-theme {
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
+  overflow-x: clip;
   background: #f8f6f0;
   color: #243328;
 }
@@ -372,8 +376,7 @@
   box-shadow: 0 10px 24px rgba(5, 16, 37, .26);
 }
 
-.landing-menu-button { display: none; }
-.landing-mobile-actions { display: none; }
+.landing-mobile-prebook { display: none; }
 
 .docs-hero {
   position: relative;
@@ -526,7 +529,6 @@
   .landing-brand { font-size: 1.4rem; }
   .landing-brand-mark { width: 1.6rem; height: 1.6rem; }
   .landing-nav, .landing-header-actions { display: none; }
-  .landing-mobile-actions { display: flex; align-items: center; justify-self: end; gap: .35rem; }
   .landing-mobile-prebook {
     display: inline-flex;
     align-items: center;
@@ -539,8 +541,8 @@
     font-size: .7rem;
     font-weight: 850;
     text-shadow: 0 1px 10px rgba(7, 18, 39, .36);
+    justify-self: end;
   }
-  .landing-menu-button { display: inline-flex; color: #fff; }
   .docs-hero-content { align-items: center; justify-content: center; padding: 5.5rem 1.5rem 10vh; text-align: center; }
   .docs-hero-content h1 { max-width: 10ch; font-size: clamp(2.85rem, 13vw, 4.25rem); letter-spacing: -.075em; }
   .docs-hero-copy { transform: translateY(-12vh); }
