@@ -318,4 +318,4 @@ Rebuild the native development app with `npm run android`, grant microphone perm
 
 ## License and asset attribution
 
-Review `vokai-client/assets/LICENSE-SOURCES.txt` for the included visual asset licenses and attribution details.
+Review `vokai-client/assets/LICENSE-SOURCES.txt` for the included visual asset licenses and attribution details..
