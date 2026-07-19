@@ -188,17 +188,18 @@ function ProductTour() {
       <SectionTitle eyebrow="See VOKAI in action" title="A visual guide through every part of your learning journey.">Choose a feature on the right to see the exact screen and a quick explanation of what that part of VOKAI does.</SectionTitle>
       <div className="grid gap-8 xl:grid-cols-[minmax(290px,.8fr)_minmax(0,1.2fr)] xl:items-start">
         <div className="xl:sticky xl:top-24">
-          <div className="tour-stage">
+          <div className="tour-stage relative">
+            <Button variant="outline" size="icon" className="absolute left-3 top-1/2 z-10 flex -translate-y-1/2 rounded-full border-stone-200 bg-white/90 shadow-md backdrop-blur transition hover:scale-105 hover:bg-white" onClick={() => selectStep(activeIndex - 1)} aria-label="Show previous guide screen"><ChevronLeft className="size-5 text-stone-700" /></Button>
+            <Button variant="outline" size="icon" className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 rounded-full border-stone-200 bg-white/90 shadow-md backdrop-blur transition hover:scale-105 hover:bg-white" onClick={() => selectStep(activeIndex + 1)} aria-label="Show next guide screen"><ChevronRight className="size-5 text-stone-700" /></Button>
+
             <div className="tour-visual-row">
               <div className="tour-phone-shell">
                 <img key={active.id} className="tour-phone-image" src={active.image} alt={`${active.title} screen in VOKAI`} />
               </div>
               <div className="tour-callout" aria-live="polite"><ArrowRight className="tour-callout-arrow size-4" aria-hidden="true" /><span>{active.callout}</span></div>
             </div>
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <Button variant="outline" size="sm" onClick={() => selectStep(activeIndex - 1)} aria-label="Show previous guide screen"><ChevronLeft /> Previous</Button>
-              <span className="text-center text-xs font-semibold text-stone-500">{activeIndex + 1} of {productTour.length}</span>
-              <Button variant="outline" size="sm" onClick={() => selectStep(activeIndex + 1)} aria-label="Show next guide screen">Next <ChevronRight /></Button>
+            <div className="mt-6 text-center text-xs font-semibold text-stone-500">
+              {activeIndex + 1} of {productTour.length}
             </div>
           </div>
           <div className="mt-5 rounded-2xl border border-[#D5E5D1] bg-[#F1F8EF] p-4">
