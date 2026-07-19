@@ -99,6 +99,14 @@ type TourStep = {
   callout: string;
 };
 
+function PlayStoreMark() {
+  return <svg viewBox="0 0 36 40" aria-hidden="true"><path fill="#52C7EA" d="M3 3.5 21.7 20 3 36.5Z" /><path fill="#83D353" d="m21.7 20 5.4 4.8L8.2 36.2 3 36.5Z" /><path fill="#F7C74A" d="m3 3.5 5.2.3 18.9 11.4-5.4 4.8Z" /><path fill="#F46D6D" d="M27.1 15.2c4.7 2.8 4.7 6.8 0 9.6L21.7 20Z" /></svg>;
+}
+
+function AppStoreMark() {
+  return <svg viewBox="0 0 36 40" fill="none" aria-hidden="true"><path d="m10 29 9-18 8 18M13 23h13M23 9l2.2-3.8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.2" /></svg>;
+}
+
 const productTour: TourStep[] = [
   { id: "learning-choice", group: "Set up", image: learningChoiceImage, eyebrow: "Start your plan", title: "Choose what you want to learn", description: "Begin by naming the language or topic you want to focus on. VOKAI uses this choice to shape your daily plan and coach prompts.", callout: "Pick the learning path that feels most exciting right now." },
   { id: "experience", group: "Set up", image: experienceImage, eyebrow: "Start your plan", title: "Set a comfortable starting level", description: "Tell VOKAI whether you are a beginner, intermediate learner, or advanced learner so the first tasks meet you where you are.", callout: "Choose the level that matches today—not the level you feel you should be." },
@@ -231,6 +239,8 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [heroSoundEnabled, setHeroSoundEnabled] = useState(false);
+  const [storeMenuOpen, setStoreMenuOpen] = useState(false);
+  const [appStoreComingSoon, setAppStoreComingSoon] = useState(false);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
   const heroSectionRef = useRef<HTMLElement>(null);
   const heroContentRef = useRef<HTMLDivElement>(null);
@@ -339,6 +349,11 @@ function App() {
     });
   };
 
+  const showAppStoreComingSoon = () => {
+    setAppStoreComingSoon(true);
+    window.setTimeout(() => setAppStoreComingSoon(false), 2200);
+  };
+
   useLayoutEffect(() => {
     const hero = heroSectionRef.current;
     const heroContent = heroContentRef.current;
@@ -406,7 +421,16 @@ function App() {
             <a href="#daily-journey">About</a>
             <a href="#privacy">Contact</a>
           </nav>
-          <a className="landing-journey-button" href={playStoreUrl} target="_blank" rel="noreferrer">Begin journey</a>
+          <div className={`landing-store-menu ${storeMenuOpen ? "is-open" : ""}`}>
+            <button type="button" className="landing-journey-button" onClick={() => setStoreMenuOpen((open) => !open)} aria-expanded={storeMenuOpen} aria-haspopup="menu">
+              Begin journey <ChevronDown className="size-4" />
+            </button>
+            <div className="landing-store-popover" role="menu" aria-label="Download VOKAI">
+              <a className="store-option" href={playStoreUrl} target="_blank" rel="noreferrer" role="menuitem" aria-label="Get VOKAI on Google Play"><PlayStoreMark /><span>Google Play</span></a>
+              <button type="button" className="store-option" onClick={showAppStoreComingSoon} role="menuitem" aria-label="Get VOKAI on the App Store"><AppStoreMark /><span>App Store</span></button>
+              {appStoreComingSoon && <p className="landing-store-notice" role="status">App Store coming soon</p>}
+            </div>
+          </div>
           <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
             {menuOpen ? <X /> : <Menu />}
           </Button>

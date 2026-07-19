@@ -256,7 +256,10 @@
 .landing-nav a:nth-child(4) { animation-delay: .43s; }
 
 .landing-journey-button {
-  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
   border: 1px solid rgba(255, 255, 255, .45);
   border-radius: 999px;
   background: rgba(13, 31, 59, .12);
@@ -266,9 +269,88 @@
   animation: landing-from-right .62s .16s cubic-bezier(.22, .8, .28, 1) both;
 }
 
+.landing-store-menu {
+  position: relative;
+  justify-self: end;
+}
+
 .landing-journey-button:hover {
   border-color: rgba(255, 255, 255, .85);
   background: rgba(255, 255, 255, .14);
+}
+
+.landing-store-popover {
+  position: absolute;
+  top: calc(100% + .65rem);
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-width: max-content;
+  border: 1px solid rgba(255, 255, 255, .32);
+  border-radius: 1rem;
+  background: rgba(12, 28, 54, .88);
+  padding: .45rem;
+  box-shadow: 0 16px 32px rgba(5, 16, 37, .28);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px) scale(.96);
+  transform-origin: top right;
+  transition: opacity .18s ease, transform .18s ease;
+  backdrop-filter: blur(16px);
+}
+
+.landing-store-popover::before {
+  position: absolute;
+  top: -.75rem;
+  right: 0;
+  left: 0;
+  height: .75rem;
+  content: "";
+}
+
+.landing-store-menu:hover .landing-store-popover,
+.landing-store-menu:focus-within .landing-store-popover,
+.landing-store-menu.is-open .landing-store-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.store-option {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  border: 1px solid transparent;
+  border-radius: .72rem;
+  background: transparent;
+  padding: .45rem .55rem;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.store-option svg { width: 1.25rem; height: 1.4rem; flex: none; }
+.store-option:hover,
+.store-option:focus-visible { border-color: rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .12); outline: none; transform: translateY(-1px); }
+
+.landing-store-notice {
+  position: absolute;
+  top: calc(100% + .5rem);
+  right: 0;
+  width: 100%;
+  margin: 0;
+  border: 1px solid rgba(246, 198, 108, .5);
+  border-radius: .7rem;
+  background: rgba(46, 33, 28, .92);
+  padding: .45rem .65rem;
+  color: #ffe3a7;
+  font-size: .7rem;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(5, 16, 37, .26);
 }
 
 .landing-menu-button { display: none; }
@@ -423,7 +505,7 @@
   .landing-header-inner { min-height: 5.5rem; padding-inline: 1.25rem; }
   .landing-brand { font-size: 1.4rem; }
   .landing-brand-mark { width: 1.6rem; height: 1.6rem; }
-  .landing-nav, .landing-journey-button { display: none; }
+  .landing-nav, .landing-store-menu { display: none; }
   .landing-menu-button { display: inline-flex; justify-self: end; color: #fff; }
   .docs-hero-content { align-items: center; justify-content: center; padding: 5.5rem 1.5rem 10vh; text-align: center; }
   .docs-hero-content h1 { max-width: 10ch; font-size: clamp(2.85rem, 13vw, 4.25rem); letter-spacing: -.075em; }
