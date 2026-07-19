@@ -2,6 +2,8 @@
 
 VOKAI is an Android-first learning companion for a focused, personalised 90-day coding journey. It combines a calm mobile learning experience with a FastAPI backend that securely stores a learner’s profile, syllabus, daily check-ins, streaks, and progress garden.
 
+**Documentation**: [docs-vokai.vercel.app](https://docs-vokai.vercel.app/)
+
 ## The problem
 
 Most coding courses give learners content, but not a sustainable routine. People lose momentum because the next step is unclear, the plan is not adapted to their available time, and progress is difficult to see. Generic chat tools can answer questions, but they do not know the learner’s journey day, routine, completed tasks, or long-term goal.
