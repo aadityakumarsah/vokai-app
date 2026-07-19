@@ -94,8 +94,10 @@ https://<render-service>.onrender.com/vokai/premium/webhooks/dodo
 ```
 
 Copy its signing secret into `DODO_PAYMENTS_WEBHOOK_KEY` in Render, then deploy
-again. Dodo contact details are only stored after the signed `payment.succeeded`
-event reaches this endpoint.
+again. It is intentionally not a first-deploy Blueprint prompt because Dodo
+generates that secret only after the public webhook endpoint exists. Dodo contact
+details are only stored after the signed `payment.succeeded` event reaches this
+endpoint.
 
 ## Enable authentication
 

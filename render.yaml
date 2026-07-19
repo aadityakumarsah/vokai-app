@@ -26,8 +26,6 @@ services:
         sync: false
       - key: DODO_PAYMENTS_API_KEY
         sync: false
-      - key: DODO_PAYMENTS_WEBHOOK_KEY
-        sync: false
       - key: DODO_WEEKLY_PRODUCT_ID
         sync: false
       - key: DODO_MONTHLY_PRODUCT_ID
