@@ -256,6 +256,11 @@ function App() {
   const bloomLayerRef = useRef<HTMLDivElement>(null);
   const lastTrailPetalAtRef = useRef(0);
   const closeMenu = () => setMenuOpen(false);
+  const navigateToPremium = () => {
+    window.history.pushState({}, "", "#premium");
+    setMenuOpen(false);
+    window.requestAnimationFrame(() => document.getElementById("premium")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const attemptHeroPlayback = () => {
     const video = heroVideoRef.current;
     if (!video || heroSoundEnabled) return;
@@ -429,14 +434,18 @@ function App() {
             <a href="#daily-journey">About</a>
             <a href="#privacy">Contact</a>
           </nav>
-          <div className={`landing-store-menu ${storeMenuOpen ? "is-open" : ""}`}>
+          <div className="landing-header-actions">
+            <a className="landing-prebook-link" href="#premium" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /> Pre-book</a>
+            <div className={`landing-store-menu ${storeMenuOpen ? "is-open" : ""}`}>
             <button type="button" className="landing-journey-button" onClick={() => setStoreMenuOpen((open) => !open)} aria-expanded={storeMenuOpen} aria-haspopup="menu">
               Begin journey <ChevronDown className="size-4" />
             </button>
             <div className="landing-store-popover" role="menu" aria-label="Download VOKAI">
+              <button type="button" className="store-option" onClick={navigateToPremium} role="menuitem" aria-label="Pre-book VOKAI Premium"><Sparkles className="size-5" /><span>Pre-book Premium</span></button>
               <a className="store-option" href={playStoreUrl} target="_blank" rel="noreferrer" role="menuitem" aria-label="Get VOKAI on Google Play"><PlayStoreMark /><span>Google Play</span></a>
               <button type="button" className="store-option" onClick={showAppStoreComingSoon} role="menuitem" aria-label="Get VOKAI on the App Store"><AppStoreMark /><span>App Store</span></button>
               {appStoreComingSoon && <p className="landing-store-notice" role="status">App Store coming soon</p>}
+            </div>
             </div>
           </div>
           <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
