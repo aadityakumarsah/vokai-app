@@ -379,63 +379,7 @@ function App() {
     window.setTimeout(() => setAppStoreComingSoon(false), 2200);
   };
 
-  useLayoutEffect(() => {
-    const hero = heroSectionRef.current;
-    const heroContent = heroContentRef.current;
-    const guide = guideRevealRef.current;
-    if (
-      !hero
-      || !heroContent
-      || !guide
-      || window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      || window.matchMedia("(max-width: 760px)").matches
-    ) return;
 
-    const context = gsap.context(() => {
-      const guideSections = guide.querySelectorAll("main > section");
-
-      gsap.set(guide, { yPercent: 8 });
-
-      gsap.timeline({
-        scrollTrigger: {
-          trigger: hero,
-          start: "top top",
-          end: "bottom top",
-          scrub: 0.55,
-        },
-      }).to(heroContent, {
-        clipPath: "inset(100% 0 0 0)",
-        yPercent: -22,
-        ease: "none",
-      }, 0);
-
-      gsap.to(guide, {
-        yPercent: 0,
-        ease: "none",
-        scrollTrigger: {
-          trigger: guide,
-          start: "top 92%",
-          end: "top 35%",
-          scrub: 0.7,
-        },
-      });
-
-      gsap.from(guideSections, {
-        autoAlpha: 0,
-        y: 40,
-        duration: 0.75,
-        stagger: 0.1,
-        ease: "power3.out",
-        scrollTrigger: {
-          trigger: guide,
-          start: "top 76%",
-          toggleActions: "play none none reverse",
-        },
-      });
-    });
-
-    return () => context.revert();
-  }, []);
 
   return (
     <div className="docs-theme min-h-screen" onPointerDown={createCursorBloom} onPointerMove={createCursorPetalTrail}>
