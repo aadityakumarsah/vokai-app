@@ -4,18 +4,20 @@ from __future__ import annotations
 import json
 import os
 import re
+import hashlib
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from time import time
 from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
@@ -45,6 +47,9 @@ def infer_supabase_url() -> str:
 SUPABASE_URL = infer_supabase_url()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip() or "gemini-2.5-flash"
+CLOUDINARY_CLOUD_NAME = (os.getenv("CLOUDINARY_CLOUD_NAME") or os.getenv("CLOUDNARY_NAME") or "").strip()
+CLOUDINARY_API_KEY = (os.getenv("CLOUDINARY_API_KEY") or os.getenv("CLOUDNARY_API_KEY") or "").strip()
+CLOUDINARY_API_SECRET = (os.getenv("CLOUDINARY_API_SECRET") or os.getenv("CLOUDNARY_API_SECRET") or "").strip()
 MILESTONES = (
     {"day": 1, "key": "pot", "title": "Welcome pot"},
     {"day": 5, "key": "butterfly", "title": "Flowers and bee"},
@@ -55,8 +60,15 @@ MILESTONES = (
     {"day": 90, "key": "frog", "title": "Full bloom frog"},
 )
 TASKS = ("learn", "build", "reflect")
-REQUIRED_TABLES = ("vokai_user_profiles", "vokai_user_checkins", "vokai_user_syllabi")
-REQUIRED_PROFILE_COLUMNS = {"custom_language", "busy_schedule", "experience_level", "routine_note"}
+REQUIRED_TABLES = ("vokai_user_profiles", "vokai_user_checkins", "vokai_user_syllabi", "vokai_friendships", "vokai_checkin_rewards")
+REQUIRED_PROFILE_COLUMNS = {"custom_language", "busy_schedule", "experience_level", "routine_note", "user_code", "profile_image_url", "coins", "points"}
+CHECKIN_REWARDS = {
+    2: (10, 5, "Day 2 boost"),
+    3: (20, 10, "Day 3 boost"),
+    4: (25, 15, "Day 4 boost"),
+    10: (50, 25, "Day 10 celebration"),
+    60: (200, 100, "Day 60 legend reward"),
+}
 
 app = FastAPI(title="VOKAI Server", version="2.0.0")
 app.add_middleware(
@@ -83,7 +95,7 @@ def verify_database_schema() -> None:
         ).fetchall()
     found_columns = {row["column_name"] for row in profile_columns}
     if any(row["table_name"] is None for row in rows) or not REQUIRED_PROFILE_COLUMNS.issubset(found_columns):
-        raise RuntimeError("Run vokai-server/sql/001 through 009 in Supabase SQL Editor before starting VOKAI Server.")
+        raise RuntimeError("Run vokai-server/sql/001 through 013 in Supabase SQL Editor before starting VOKAI Server.")
 
 
 @app.on_event("startup")
@@ -149,6 +161,14 @@ class CheckinBody(BaseModel):
     completed: bool
 
 
+class FriendRequestBody(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+
+
+class FriendRequestResponseBody(BaseModel):
+    action: Literal["accept", "decline"]
+
+
 class FocusCoachMessageBody(BaseModel):
     role: Literal["user", "assistant"]
     text: str = Field(min_length=1, max_length=1_500)
@@ -173,7 +193,7 @@ def serialise_datetime(value: datetime | None) -> str | None:
 def profile_for(user_id: str) -> dict | None:
     with get_connection() as connection:
         row = connection.execute(
-            """SELECT email, name, language, custom_language, experience_level, free_time, daily_minutes, reminders,
+            """SELECT email, name, user_code, profile_image_url, coins, points, language, custom_language, experience_level, free_time, daily_minutes, reminders,
                       current_streak, longest_streak, busy_schedule, routine_note, started_at
                FROM public.vokai_user_profiles WHERE user_id = %s""",
             (user_id,),
@@ -182,6 +202,51 @@ def profile_for(user_id: str) -> dict | None:
         return None
     busy_schedule = row["busy_schedule"] if isinstance(row["busy_schedule"], list) else json.loads(row["busy_schedule"] or "[]")
     return {**row, "busy_schedule": busy_schedule, "routine_note": row["routine_note"] or "", "started_at": serialise_datetime(row["started_at"])}
+
+
+def cloudinary_profile_image_url(user_id: str, image_bytes: bytes, content_type: str) -> str:
+    if not CLOUDINARY_CLOUD_NAME or not CLOUDINARY_API_KEY or not CLOUDINARY_API_SECRET:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Profile photos are not configured yet.")
+    timestamp = str(int(time()))
+    parameters = {
+        "overwrite": "true",
+        "public_id": f"vokai/profiles/{user_id}",
+        "timestamp": timestamp,
+    }
+    signature_payload = "&".join(f"{key}={parameters[key]}" for key in sorted(parameters))
+    signature = hashlib.sha1(f"{signature_payload}{CLOUDINARY_API_SECRET}".encode("utf-8")).hexdigest()
+    boundary = f"----vokai-{uuid4().hex}"
+    body = bytearray()
+
+    def add_field(name: str, value: str) -> None:
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+        body.extend(value.encode("utf-8"))
+        body.extend(b"\r\n")
+
+    for name, value in {**parameters, "api_key": CLOUDINARY_API_KEY, "signature": signature}.items():
+        add_field(name, value)
+    body.extend(f"--{boundary}\r\n".encode("utf-8"))
+    body.extend(b'Content-Disposition: form-data; name="file"; filename="profile-image"\r\n')
+    body.extend(f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"))
+    body.extend(image_bytes)
+    body.extend(b"\r\n")
+    body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+    request = Request(
+        f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD_NAME}/image/upload",
+        data=bytes(body),
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Profile photo upload failed. Please try again.") from None
+    image_url = str(payload.get("secure_url") or "")
+    if not image_url.startswith("https://"):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Profile photo upload returned an invalid image.")
+    return image_url
 
 
 def start_date_for(user_id: str, fallback: date) -> date:
@@ -277,6 +342,83 @@ def garden_state(journey_day: int) -> dict:
         "journey_day": journey_day,
         "unlocked": [milestone for milestone in MILESTONES if milestone["day"] <= journey_day],
         "next_unlock": next((milestone for milestone in MILESTONES if milestone["day"] > journey_day), None),
+    }
+
+
+def reward_for(journey_day: int) -> dict:
+    bonus_coins, bonus_points, bonus_label = CHECKIN_REWARDS.get(journey_day, (0, 0, None))
+    return {
+        "coins": 10 + bonus_coins,
+        "points": 5 + bonus_points,
+        "bonus_label": bonus_label,
+    }
+
+
+def award_checkin_reward(connection: psycopg.Connection, user_id: str, check_date: date, journey_day: int) -> dict | None:
+    reward = reward_for(journey_day)
+    created = connection.execute(
+        """INSERT INTO public.vokai_checkin_rewards (user_id, check_date, journey_day, coins, points, bonus_label)
+           VALUES (%s, %s, %s, %s, %s, %s)
+           ON CONFLICT (user_id, check_date) DO NOTHING
+           RETURNING coins, points, bonus_label""",
+        (user_id, check_date, journey_day, reward["coins"], reward["points"], reward["bonus_label"]),
+    ).fetchone()
+    if created is None:
+        return None
+    connection.execute(
+        """UPDATE public.vokai_user_profiles
+           SET coins = coins + %s, points = points + %s, updated_at = NOW()
+           WHERE user_id = %s""",
+        (created["coins"], created["points"], user_id),
+    )
+    return dict(created)
+
+
+def friend_summary(row: dict, local_date: date, timestamp_key: str) -> dict:
+    started_at = row["started_at"]
+    journey_day = min(90, max(1, (local_date - started_at.date()).days + 1))
+    language = row["custom_language"].strip() if row["language"] == "Other" and row["custom_language"] else row["language"]
+    return {
+        "id": str(row["user_id"]),
+        "name": row["name"],
+        "profile_image_url": row["profile_image_url"],
+        "language": language,
+        "journey_day": journey_day,
+        "current_streak": int(row["current_streak"]),
+        "coins": int(row["coins"]),
+        "points": int(row["points"]),
+        timestamp_key: serialise_datetime(row[timestamp_key]),
+    }
+
+
+def friends_for(user_id: str, local_date: date) -> dict:
+    with get_connection() as connection:
+        friend_rows = connection.execute(
+            """SELECT profile.user_id, profile.name, profile.profile_image_url, profile.language, profile.custom_language,
+                      profile.current_streak, profile.coins, profile.points, profile.started_at, friendship.updated_at AS connected_at
+               FROM public.vokai_friendships AS friendship
+               JOIN public.vokai_user_profiles AS profile
+                 ON profile.user_id = CASE
+                   WHEN friendship.requester_id = %s THEN friendship.addressee_id
+                   ELSE friendship.requester_id
+                 END
+               WHERE friendship.status = 'accepted'
+                 AND %s IN (friendship.requester_id, friendship.addressee_id)
+               ORDER BY lower(profile.name), profile.user_id""",
+            (user_id, user_id),
+        ).fetchall()
+        request_rows = connection.execute(
+            """SELECT profile.user_id, profile.name, profile.profile_image_url, profile.language, profile.custom_language,
+                      profile.current_streak, profile.coins, profile.points, profile.started_at, friendship.created_at AS requested_at
+               FROM public.vokai_friendships AS friendship
+               JOIN public.vokai_user_profiles AS profile ON profile.user_id = friendship.requester_id
+               WHERE friendship.addressee_id = %s AND friendship.status = 'pending'
+               ORDER BY friendship.created_at DESC""",
+            (user_id,),
+        ).fetchall()
+    return {
+        "friends": [friend_summary(row, local_date, "connected_at") for row in friend_rows],
+        "incoming_requests": [friend_summary(row, local_date, "requested_at") for row in request_rows],
     }
 
 
@@ -558,6 +700,165 @@ def save_profile(body: ProfileBody, user: AuthUser = Depends(get_current_user)) 
     return {"success": True, "data": snapshot(user.id, date.today())}
 
 
+@app.post("/vokai/profile/photo")
+async def upload_profile_photo(file: UploadFile = File(...), user: AuthUser = Depends(get_current_user)) -> dict:
+    if profile_for(user.id) is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Finish setting up your learning profile before adding a photo.")
+    content_type = file.content_type or ""
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Choose an image file for your profile photo.")
+    image_bytes = await file.read()
+    if not image_bytes or len(image_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Choose an image smaller than 5 MB.")
+    image_url = cloudinary_profile_image_url(user.id, image_bytes, content_type)
+    with get_connection() as connection:
+        connection.execute(
+            """UPDATE public.vokai_user_profiles
+               SET profile_image_url = %s, updated_at = NOW() WHERE user_id = %s""",
+            (image_url, user.id),
+        )
+    return {"success": True, "data": profile_for(user.id)}
+
+
+@app.get("/vokai/friends")
+def get_friends(user: AuthUser = Depends(get_current_user)) -> dict:
+    return {"success": True, "data": friends_for(user.id, date.today())}
+
+
+@app.post("/vokai/friends/requests")
+def create_friend_request(body: FriendRequestBody, user: AuthUser = Depends(get_current_user)) -> dict:
+    email = body.email.strip().lower()
+    if "@" not in email or email.startswith("@") or email.endswith("@"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enter a valid friend email address.")
+    with get_connection() as connection:
+        target = connection.execute(
+            """SELECT user_id FROM public.vokai_user_profiles
+               WHERE lower(email) = %s""",
+            (email,),
+        ).fetchone()
+        if target is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="That VOKAI learner could not be found.")
+        target_id = str(target["user_id"])
+        if target_id == user.id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="You cannot add yourself as a friend.")
+        existing = connection.execute(
+            """SELECT requester_id, status FROM public.vokai_friendships
+               WHERE (requester_id = %s AND addressee_id = %s)
+                  OR (requester_id = %s AND addressee_id = %s)""",
+            (user.id, target_id, target_id, user.id),
+        ).fetchone()
+        if existing is not None:
+            if existing["status"] == "accepted":
+                detail = "You are already friends."
+            elif str(existing["requester_id"]) == user.id:
+                detail = "Your friend request is already waiting for a response."
+            else:
+                detail = "This learner already sent you a request. Accept it from Friends."
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+        created = connection.execute(
+            """INSERT INTO public.vokai_friendships (requester_id, addressee_id, status)
+               VALUES (%s, %s, 'pending') ON CONFLICT DO NOTHING""",
+            (user.id, target_id),
+        )
+        if created.rowcount != 1:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A friend request already exists for this learner.")
+    return {"success": True, "data": friends_for(user.id, date.today())}
+
+
+@app.put("/vokai/friends/requests/{requester_id}")
+def respond_to_friend_request(
+    requester_id: str,
+    body: FriendRequestResponseBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
+    try:
+        requester_uuid = str(UUID(requester_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend request not found.") from None
+    with get_connection() as connection:
+        existing = connection.execute(
+            """SELECT requester_id FROM public.vokai_friendships
+               WHERE requester_id = %s AND addressee_id = %s AND status = 'pending'
+               FOR UPDATE""",
+            (requester_uuid, user.id),
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend request not found.")
+        if body.action == "accept":
+            connection.execute(
+                """UPDATE public.vokai_friendships SET status = 'accepted'
+                   WHERE requester_id = %s AND addressee_id = %s""",
+                (requester_uuid, user.id),
+            )
+        else:
+            connection.execute(
+                """DELETE FROM public.vokai_friendships
+                   WHERE requester_id = %s AND addressee_id = %s""",
+                (requester_uuid, user.id),
+            )
+    return {"success": True, "data": friends_for(user.id, date.today())}
+
+
+@app.delete("/vokai/friends/{friend_id}")
+def remove_friend(friend_id: str, user: AuthUser = Depends(get_current_user)) -> dict:
+    try:
+        friend_uuid = str(UUID(friend_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend not found.") from None
+    with get_connection() as connection:
+        deleted = connection.execute(
+            """DELETE FROM public.vokai_friendships
+               WHERE status = 'accepted'
+                 AND ((requester_id = %s AND addressee_id = %s)
+                   OR (requester_id = %s AND addressee_id = %s))""",
+            (user.id, friend_uuid, friend_uuid, user.id),
+        )
+        if deleted.rowcount != 1:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend not found.")
+    return {"success": True, "data": friends_for(user.id, date.today())}
+
+
+@app.get("/vokai/friends/{friend_id}/profile")
+def get_friend_profile(friend_id: str, user: AuthUser = Depends(get_current_user)) -> dict:
+    try:
+        friend_uuid = str(UUID(friend_id))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend profile not found.") from None
+    with get_connection() as connection:
+        friendship = connection.execute(
+            """SELECT 1 FROM public.vokai_friendships
+               WHERE status = 'accepted'
+                 AND ((requester_id = %s AND addressee_id = %s)
+                   OR (requester_id = %s AND addressee_id = %s))""",
+            (user.id, friend_uuid, friend_uuid, user.id),
+        ).fetchone()
+        friend = connection.execute(
+            """SELECT user_id, name, profile_image_url, language, custom_language, experience_level,
+                      daily_minutes, current_streak, longest_streak, coins, points, started_at
+               FROM public.vokai_user_profiles WHERE user_id = %s""",
+            (friend_uuid,),
+        ).fetchone()
+    if friendship is None or friend is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Friend profile not found.")
+    current_date = date.today()
+    language = friend["custom_language"].strip() if friend["language"] == "Other" and friend["custom_language"] else friend["language"]
+    journey_day = min(90, max(1, (current_date - friend["started_at"].date()).days + 1))
+    completed_days = streak_and_total(friend_uuid, current_date)["completed_days"]
+    safe_week = [
+        {"check_date": checkin["check_date"], "journey_day": checkin["journey_day"], "day_complete": checkin["day_complete"]}
+        for checkin in week_state(friend_uuid, current_date)
+    ]
+    return {"success": True, "data": {
+        "id": str(friend["user_id"]), "name": friend["name"], "profile_image_url": friend["profile_image_url"],
+        "language": language, "experience_level": friend["experience_level"], "daily_minutes": int(friend["daily_minutes"]),
+        "journey_day": journey_day, "current_streak": int(friend["current_streak"]),
+        "longest_streak": int(friend["longest_streak"]), "completed_days": completed_days,
+        "coins": int(friend["coins"]), "points": int(friend["points"]),
+        "unlocked": [milestone for milestone in MILESTONES if milestone["day"] <= journey_day],
+        "week": safe_week,
+    }}
+
+
 @app.get("/vokai/bootstrap")
 def bootstrap(check_date: date = Query(default_factory=date.today), user: AuthUser = Depends(get_current_user)) -> dict:
     return {"success": True, "data": snapshot(user.id, check_date)}
@@ -579,7 +880,7 @@ def set_checkin(body: CheckinBody, user: AuthUser = Depends(get_current_user)) -
     existing = today_state(user.id, body.check_date)
     existing[body.task] = body.completed
     day_complete = all(existing[task] for task in TASKS)
-    completed_at = datetime.now(timezone.utc) if day_complete else None
+    completed_at = existing["completed_at"] if day_complete and existing["day_complete"] else (datetime.now(timezone.utc) if day_complete else None)
     with get_connection() as connection:
         connection.execute(
             """INSERT INTO public.vokai_user_checkins
@@ -590,6 +891,8 @@ def set_checkin(body: CheckinBody, user: AuthUser = Depends(get_current_user)) -
                  reflect = EXCLUDED.reflect, day_complete = EXCLUDED.day_complete, completed_at = EXCLUDED.completed_at""",
             (user.id, body.check_date, journey_day, existing["learn"], existing["build"], existing["reflect"], day_complete, completed_at),
         )
+        if day_complete:
+            award_checkin_reward(connection, user.id, body.check_date, journey_day)
     return {"success": True, "data": snapshot(user.id, body.check_date)}
 
 

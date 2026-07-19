@@ -6,6 +6,7 @@ const PROGRESS_KEY = 'vokai-progress-v1';
 
 export type LearnerProfile = {
   name: string;
+  profileImageUrl?: string;
   language: Language;
   customLanguage?: string;
   experienceLevel: ExperienceLevel;

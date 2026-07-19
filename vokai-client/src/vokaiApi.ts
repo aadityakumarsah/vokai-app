@@ -17,6 +17,10 @@ export type RemoteCheckIn = {
 export type RemoteProfile = {
   email: string;
   name: string;
+  user_code: number;
+  profile_image_url: string | null;
+  coins: number;
+  points: number;
   language: string;
   custom_language: string | null;
   experience_level: ExperienceLevel;
@@ -52,6 +56,48 @@ export type FocusCoachMessage = {
   text: string;
 };
 export type FocusCoachReply = { reply: string };
+export type Friend = {
+  id: string;
+  name: string;
+  profile_image_url: string | null;
+  language: string;
+  journey_day: number;
+  current_streak: number;
+  coins: number;
+  points: number;
+  connected_at: string;
+};
+export type FriendRequest = {
+  id: string;
+  name: string;
+  profile_image_url: string | null;
+  language: string;
+  journey_day: number;
+  current_streak: number;
+  coins: number;
+  points: number;
+  requested_at: string;
+};
+export type FriendProfile = {
+  id: string;
+  name: string;
+  profile_image_url: string | null;
+  language: string;
+  experience_level: ExperienceLevel;
+  daily_minutes: number;
+  journey_day: number;
+  current_streak: number;
+  longest_streak: number;
+  completed_days: number;
+  coins: number;
+  points: number;
+  unlocked: Array<{ day: number; key: string; title: string }>;
+  week: Array<{ check_date: string; journey_day: number; day_complete: boolean }>;
+};
+export type FriendsSnapshot = {
+  friends: Friend[];
+  incoming_requests: FriendRequest[];
+};
 
 const configuredBaseUrl = (process.env.EXPO_PUBLIC_VOKAI_API_URL ?? '').replace(/\/$/, '');
 // Expo Go can run either on a physical Android device or an Android Studio
@@ -115,6 +161,27 @@ async function request<T>(path: string, accessToken: string, init?: RequestInit)
   return null;
 }
 
+async function uploadRequest<T>(path: string, accessToken: string, body: FormData): Promise<T | null> {
+  for (const baseUrl of apiBaseUrls()) {
+    try {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method: 'POST',
+        body,
+        headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) continue;
+      const envelope = await response.json() as ApiEnvelope<T>;
+      if (envelope.success && envelope.data) {
+        resolvedBaseUrl = baseUrl;
+        return envelope.data;
+      }
+    } catch {
+      // Try the matching emulator or physical-device address next.
+    }
+  }
+  return null;
+}
+
 export function syncVokaiProfile(accessToken: string, profile: LearnerProfile, startedAt: string) {
   return request<JourneySnapshot>('/vokai/profile', accessToken, {
     method: 'PUT',
@@ -165,6 +232,42 @@ export function fetchVokaiJourney(accessToken: string) {
 
 export function resetVokaiJourney(accessToken: string) {
   return request<null>('/vokai/journey', accessToken, { method: 'DELETE' });
+}
+
+export function uploadVokaiProfilePhoto(accessToken: string, uri: string, mimeType?: string | null) {
+  const body = new FormData();
+  body.append('file', {
+    uri,
+    name: 'vokai-profile-photo.jpg',
+    type: mimeType || 'image/jpeg',
+  } as unknown as Blob);
+  return uploadRequest<RemoteProfile>('/vokai/profile/photo', accessToken, body);
+}
+
+export function fetchVokaiFriends(accessToken: string) {
+  return request<FriendsSnapshot>('/vokai/friends', accessToken);
+}
+
+export function sendVokaiFriendRequest(accessToken: string, email: string) {
+  return request<FriendsSnapshot>('/vokai/friends/requests', accessToken, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function respondToVokaiFriendRequest(accessToken: string, requesterId: string, action: 'accept' | 'decline') {
+  return request<FriendsSnapshot>(`/vokai/friends/requests/${encodeURIComponent(requesterId)}`, accessToken, {
+    method: 'PUT',
+    body: JSON.stringify({ action }),
+  });
+}
+
+export function removeVokaiFriend(accessToken: string, friendId: string) {
+  return request<FriendsSnapshot>(`/vokai/friends/${encodeURIComponent(friendId)}`, accessToken, { method: 'DELETE' });
+}
+
+export function fetchVokaiFriendProfile(accessToken: string, friendId: string) {
+  return request<FriendProfile>(`/vokai/friends/${encodeURIComponent(friendId)}/profile`, accessToken);
 }
 
 export function askFocusCoach(

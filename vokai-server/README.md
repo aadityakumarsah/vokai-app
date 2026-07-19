@@ -17,6 +17,11 @@ idempotent, so rerunning them is safe:
 6. `sql/006_add_vokai_profile_updated_at_trigger.sql`
 7. `sql/007_add_vokai_language_and_routine.sql`
 8. `sql/008_add_vokai_syllabus.sql`
+9. `sql/009_add_vokai_routine_note.sql`
+10. `sql/010_add_vokai_friendships.sql`
+11. `sql/011_add_vokai_user_codes.sql`
+12. `sql/012_add_vokai_profile_images.sql`
+13. `sql/013_add_vokai_rewards.sql`
 
 The tables are keyed by `auth.users.id`, not a phone/device ID. RLS policies
 allow only the signed-in owner to access their own profile and check-ins. The
@@ -29,6 +34,16 @@ Each profile also stores the chosen language, an optional custom language, busy
 routine blocks, the recommended learning start time, `current_streak`, and
 `longest_streak`, and an experience level. A generated syllabus is stored per
 user in `vokai_user_syllabi`, including its topic completion state.
+
+Migration `010` adds authenticated friend requests. Friends can be added by
+their VOKAI account email, must accept the request, and then share only their
+name, learning language, journey day, and current streak.
+
+Migration `011` assigns every learner a permanent, random 10-digit VOKAI ID.
+Migration `012` stores the URL of a learner's uploaded profile photo.
+Migration `013` awards 10 coins and 5 points for each completed daily check-in,
+with bonus rewards on days 2, 3, 4, 10, and 60. Rewards are granted once per
+completed calendar day and are visible to accepted friends.
 
 ## Enable Focus Coach
 
@@ -66,9 +81,15 @@ URI. VOKAI's Android app is already configured with the `vokai` deep-link scheme
 The client uses these endpoints:
 
 - `PUT /vokai/profile`
+- `POST /vokai/profile/photo`
 - `GET /vokai/bootstrap`
 - `GET /vokai/auth/config`
 - `POST /vokai/focus/coach`
+- `GET /vokai/friends`
+- `POST /vokai/friends/requests`
+- `PUT /vokai/friends/requests/{requester_id}`
+- `DELETE /vokai/friends/{friend_id}`
+- `GET /vokai/friends/{friend_id}/profile`
 - `GET /vokai/syllabus`
 - `POST /vokai/syllabus/generate`
 - `PUT /vokai/syllabus/topics`

@@ -1,4 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   AlertCircle,
   ArrowRight,
@@ -6,6 +8,8 @@ import {
   Box,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CodeXml,
   Copy,
@@ -16,6 +20,9 @@ import {
   LockKeyhole,
   Menu,
   Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Play,
   Rocket,
   Server,
   ShieldCheck,
@@ -28,12 +35,26 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import learningChoiceImage from "../vokai-docs-images/vokai-before-learning-qna-whatareyoulearning.png";
+import experienceImage from "../vokai-docs-images/vokai-before-learning-howmuchdoyouknow.png";
+import scheduleImage from "../vokai-docs-images/vokai-protechyourtime-afterlogin-qna.png";
+import dailyCheckInImage from "../vokai-docs-images/vokai-homepage-dailycheckin.png";
+import coachImage from "../vokai-docs-images/vokai-focus-vokai-coach.png";
+import gardenImage from "../vokai-docs-images/vokai-garden-milestones.png";
+import syllabusImage from "../vokai-docs-images/vokai-syllabus.png";
+import syllabusHelpImage from "../vokai-docs-images/vokai-syllabus-askChatGPT-orClaude.png";
+import profileImage from "../vokai-docs-images/vokai-user-profile.png";
+import friendsImage from "../vokai-docs-images/vokai-friends.png";
+import cityImage from "../vokai-docs-images/vokai-explore-yourcity-tower-leaderboard.png";
+
+gsap.registerPlugin(ScrollTrigger);
 
 type Icon = typeof Sprout;
 type NavItem = { id: string; label: string; icon: Icon };
 
 const learnerNavigation: NavItem[] = [
   { id: "start", label: "Getting started", icon: Rocket },
+  { id: "product-tour", label: "Visual product tour", icon: Smartphone },
   { id: "daily-journey", label: "Your daily journey", icon: Target },
   { id: "coach", label: "Focus Coach", icon: Bot },
   { id: "progress", label: "Progress & garden", icon: Sprout },
@@ -61,6 +82,33 @@ const migrations = [
   "007_add_vokai_language_and_routine.sql",
   "008_add_vokai_syllabus.sql",
   "009_add_vokai_routine_note.sql",
+];
+
+const heroVideoUrl = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260324_151826_c7218672-6e92-402c-9e45-f1e0f454bdc4.mp4";
+const bloomPalette = ["#E795A6", "#EEA3B2", "#D77C93", "#F3B0BC", "#E38CA0"];
+
+type TourStep = {
+  id: string;
+  group: "Set up" | "Practice" | "Grow together";
+  image: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  callout: string;
+};
+
+const productTour: TourStep[] = [
+  { id: "learning-choice", group: "Set up", image: learningChoiceImage, eyebrow: "Start your plan", title: "Choose what you want to learn", description: "Begin by naming the language or topic you want to focus on. VOKAI uses this choice to shape your daily plan and coach prompts.", callout: "Pick the learning path that feels most exciting right now." },
+  { id: "experience", group: "Set up", image: experienceImage, eyebrow: "Start your plan", title: "Set a comfortable starting level", description: "Tell VOKAI whether you are a beginner, intermediate learner, or advanced learner so the first tasks meet you where you are.", callout: "Choose the level that matches today—not the level you feel you should be." },
+  { id: "schedule", group: "Set up", image: scheduleImage, eyebrow: "Protect your time", title: "Build around your real schedule", description: "Add your available time and routines. VOKAI turns that information into a plan that respects the rest of your day.", callout: "Use this step to protect a realistic window for learning." },
+  { id: "daily-check-in", group: "Practice", image: dailyCheckInImage, eyebrow: "Your home", title: "Complete a daily check-in", description: "Your home screen keeps today’s three focused actions, streak, and garden in one place so you always know the next useful step.", callout: "Start with one of today’s small coding actions." },
+  { id: "focus-coach", group: "Practice", image: coachImage, eyebrow: "Get unstuck", title: "Ask Focus Coach for a next step", description: "When a task feels unclear, use the coach to break it down, explain a concept, or plan the time you have available.", callout: "Open the coach when you need help turning a big task into a small move." },
+  { id: "syllabus", group: "Practice", image: syllabusImage, eyebrow: "Learn with structure", title: "Follow your guided syllabus", description: "Your syllabus collects the topics, practice steps, and daily plan that make up your learning journey.", callout: "Expand a topic to see the exact practice step for that day." },
+  { id: "syllabus-help", group: "Practice", image: syllabusHelpImage, eyebrow: "Learn with support", title: "Bring a topic to your AI helper", description: "Each syllabus topic can give you a ready-to-use question for ChatGPT or Claude, making it easier to ask for the right explanation.", callout: "Tap the suggested prompt to get help without starting from a blank message." },
+  { id: "garden", group: "Grow together", image: gardenImage, eyebrow: "See your progress", title: "Unlock garden milestones", description: "Check-ins grow your garden and unlock visible milestones such as pots, flowers, trees, berries, and bees.", callout: "Your next garden unlock is always shown so consistency feels tangible." },
+  { id: "profile", group: "Grow together", image: profileImage, eyebrow: "Your identity", title: "Keep your journey in one profile", description: "Your profile shows your VOKAI ID, earned points and coins, daily check-in history, learning language, and achievements.", callout: "Tap your name at the top of the app to open your profile." },
+  { id: "friends", group: "Grow together", image: friendsImage, eyebrow: "Learn together", title: "Add your coding circle", description: "Send a friend request using a VOKAI account email, then visit your friends’ profiles and celebrate their learning progress.", callout: "Use this card to invite a friend into your learning circle." },
+  { id: "city", group: "Grow together", image: cityImage, eyebrow: "Learn together", title: "Explore the learning city", description: "The private leaderboard turns points into solid 3D towers. More points build higher towers, and you can orbit the city to explore every friend’s progress.", callout: "Drag the city to orbit it, then use the height controls to explore the skyline." },
 ];
 
 function StatusPill({ children, tone = "available" }: { children: ReactNode; tone?: "available" | "planned" }) {
@@ -113,6 +161,58 @@ function FeatureCard({ icon: Icon, title, children, status }: { icon: Icon; titl
   );
 }
 
+function ProductTour() {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const active = productTour[activeIndex];
+  const selectStep = (index: number) => setActiveIndex((index + productTour.length) % productTour.length);
+  const groups: TourStep["group"][] = ["Set up", "Practice", "Grow together"];
+  return (
+    <section id="product-tour" className="scroll-mt-24 border-b border-stone-200 py-16">
+      <SectionTitle eyebrow="See VOKAI in action" title="A visual guide through every part of your learning journey.">Choose a feature on the right to see the exact screen and a quick explanation of what that part of VOKAI does.</SectionTitle>
+      <div className="grid gap-8 xl:grid-cols-[minmax(290px,.8fr)_minmax(0,1.2fr)] xl:items-start">
+        <div className="xl:sticky xl:top-24">
+          <div className="tour-stage">
+            <div className="tour-visual-row">
+              <div className="tour-phone-shell">
+                <img key={active.id} className="tour-phone-image" src={active.image} alt={`${active.title} screen in VOKAI`} />
+              </div>
+              <div className="tour-callout" aria-live="polite"><ArrowRight className="tour-callout-arrow size-4" aria-hidden="true" /><span>{active.callout}</span></div>
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <Button variant="outline" size="sm" onClick={() => selectStep(activeIndex - 1)} aria-label="Show previous guide screen"><ChevronLeft /> Previous</Button>
+              <span className="text-center text-xs font-semibold text-stone-500">{activeIndex + 1} of {productTour.length}</span>
+              <Button variant="outline" size="sm" onClick={() => selectStep(activeIndex + 1)} aria-label="Show next guide screen">Next <ChevronRight /></Button>
+            </div>
+          </div>
+          <div className="mt-5 rounded-2xl border border-[#D5E5D1] bg-[#F1F8EF] p-4">
+            <p className="text-[11px] font-bold tracking-[0.15em] text-vokai-forest uppercase">{active.eyebrow}</p>
+            <h3 className="mt-1 font-display text-2xl text-vokai-ink">{active.title}</h3>
+            <p className="mt-2 text-sm leading-6 text-stone-600">{active.description}</p>
+          </div>
+        </div>
+
+        <div className="space-y-7">
+          {groups.map((group) => {
+            const steps = productTour.map((step, index) => ({ step, index })).filter(({ step }) => step.group === group);
+            return <div key={group}>
+              <p className="mb-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">{group}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {steps.map(({ step, index }) => {
+                  const isActive = index === activeIndex;
+                  return <button key={step.id} type="button" onClick={() => selectStep(index)} className={`tour-step-card text-left ${isActive ? "tour-step-card-active" : ""}`} aria-pressed={isActive}>
+                    <div className="tour-step-thumb"><img src={step.image} alt="" /><span className="tour-step-number">{String(index + 1).padStart(2, "0")}</span>{isActive && <span className="tour-step-viewing">Viewing</span>}</div>
+                    <div className="min-w-0"><p className="text-[10px] font-bold tracking-[0.13em] text-vokai-forest uppercase">{step.eyebrow}</p><h3 className="mt-1 text-sm font-semibold leading-5 text-vokai-ink">{step.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{step.description}</p></div>
+                  </button>;
+                })}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate: () => void }) {
   return (
     <nav className="space-y-1">
@@ -127,28 +227,200 @@ function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate: () => v
 
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [heroSoundEnabled, setHeroSoundEnabled] = useState(false);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
+  const heroSectionRef = useRef<HTMLElement>(null);
+  const heroContentRef = useRef<HTMLDivElement>(null);
+  const guideRevealRef = useRef<HTMLDivElement>(null);
+  const bloomLayerRef = useRef<HTMLDivElement>(null);
+  const lastTrailPetalAtRef = useRef(0);
   const closeMenu = () => setMenuOpen(false);
+  const activateHeroSound = () => {
+    const video = heroVideoRef.current;
+    if (!video || heroSoundEnabled) return;
+    video.muted = false;
+    void video.play().then(() => setHeroSoundEnabled(true)).catch(() => {
+      video.muted = true;
+      void video.play().catch(() => undefined);
+    });
+  };
+
+  const createCursorBloom = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!bloomLayerRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const bloom = document.createElement("span");
+    bloom.className = "cursor-bloom";
+    bloom.style.left = `${event.clientX}px`;
+    bloom.style.top = `${event.clientY}px`;
+
+    const flower = document.createElement("span");
+    flower.className = "cursor-bloom-flower";
+    bloom.appendChild(flower);
+
+    const burstPaths = Array.from({ length: 9 }, () => {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 11 + Math.random() * 27;
+      return {
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance * (0.65 + Math.random() * 0.55),
+        rotation: -95 + Math.random() * 190,
+        scale: 0.45 + Math.random() * 0.65,
+      };
+    });
+
+    Array.from({ length: 9 }, (_, index) => index).forEach((index) => {
+      const petal = document.createElement("span");
+      petal.className = "cursor-bloom-petal";
+      petal.style.setProperty("--bloom-color", bloomPalette[index % bloomPalette.length]);
+      petal.style.setProperty("--bloom-angle", `${Math.round(Math.random() * 180 - 90)}deg`);
+      petal.style.setProperty("--bloom-width", `${7 + Math.round(Math.random() * 7)}px`);
+      petal.style.setProperty("--bloom-height", `${4 + Math.round(Math.random() * 5)}px`);
+      flower.appendChild(petal);
+    });
+
+    const core = document.createElement("span");
+    core.className = "cursor-bloom-core";
+    flower.appendChild(core);
+    bloomLayerRef.current.appendChild(bloom);
+
+    const petals = Array.from(flower.querySelectorAll<HTMLElement>(".cursor-bloom-petal"));
+    gsap.set(flower, { transformOrigin: "center center", scale: 0.2, rotation: -20 });
+    gsap.to(flower, { scale: 1.02, rotation: 14, duration: 0.26, ease: "back.out(2)" });
+    gsap.to(petals, {
+      x: (index) => burstPaths[index].x,
+      y: (index) => burstPaths[index].y,
+      rotation: (index) => burstPaths[index].rotation,
+      scale: (index) => burstPaths[index].scale,
+      duration: 0.3,
+      ease: "power2.out",
+      stagger: 0.01,
+    });
+    gsap.to(bloom, { autoAlpha: 0, duration: 0.14, delay: 0.2, ease: "power2.in", onComplete: () => bloom.remove() });
+  };
+
+  const createCursorPetalTrail = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || !bloomLayerRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const now = performance.now();
+    if (now - lastTrailPetalAtRef.current < 170) return;
+    lastTrailPetalAtRef.current = now;
+
+    const petalCount = Math.random() > 0.8 ? 2 : 1;
+    Array.from({ length: petalCount }, (_, index) => index).forEach((index) => {
+      const petal = document.createElement("span");
+      petal.className = "cursor-trail-petal";
+      petal.style.left = `${event.clientX + (index ? 4 : -2)}px`;
+      petal.style.top = `${event.clientY + (index ? -3 : 2)}px`;
+      petal.style.setProperty("--bloom-color", bloomPalette[Math.floor(Math.random() * bloomPalette.length)]);
+      petal.style.setProperty("--bloom-width", `${7 + Math.round(Math.random() * 5)}px`);
+      petal.style.setProperty("--bloom-height", `${4 + Math.round(Math.random() * 4)}px`);
+      bloomLayerRef.current?.appendChild(petal);
+
+      gsap.fromTo(petal,
+        { autoAlpha: 0.9, scale: 0.5, rotation: -80 + Math.random() * 160 },
+        {
+          autoAlpha: 0,
+          x: -15 + Math.random() * 30,
+          y: 12 + Math.random() * 22,
+          rotation: -160 + Math.random() * 320,
+          scale: 0.9 + Math.random() * 0.35,
+          duration: 0.48,
+          ease: "power2.out",
+          onComplete: () => petal.remove(),
+        },
+      );
+    });
+  };
+
+  useLayoutEffect(() => {
+    const hero = heroSectionRef.current;
+    const heroContent = heroContentRef.current;
+    const guide = guideRevealRef.current;
+    if (!hero || !heroContent || !guide || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const context = gsap.context(() => {
+      const guideSections = guide.querySelectorAll("main > section");
+
+      gsap.set(guide, { xPercent: 18 });
+
+      gsap.timeline({
+        scrollTrigger: {
+          trigger: hero,
+          start: "top top",
+          end: "bottom top",
+          scrub: 0.55,
+        },
+      }).to(heroContent, {
+        clipPath: "inset(100% 0 0 0)",
+        yPercent: -22,
+        ease: "none",
+      }, 0);
+
+      gsap.to(guide, {
+        xPercent: 0,
+        ease: "none",
+        scrollTrigger: {
+          trigger: guide,
+          start: "top 92%",
+          end: "top 35%",
+          scrub: 0.7,
+        },
+      });
+
+      gsap.from(guideSections, {
+        autoAlpha: 0,
+        x: 56,
+        duration: 0.75,
+        stagger: 0.1,
+        ease: "power3.out",
+        scrollTrigger: {
+          trigger: guide,
+          start: "top 76%",
+          toggleActions: "play none none reverse",
+        },
+      });
+    });
+
+    return () => context.revert();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[#F8F6F0]">
-      <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-[#F8F6F0]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between px-4 sm:px-6">
-          <a href="#start" className="flex items-center gap-2.5 text-vokai-ink">
-            <span className="grid size-9 place-items-center rounded-xl bg-vokai-forest text-white"><Sprout className="size-4.5" /></span>
-            <span className="font-semibold tracking-wide">VOKAI <span className="font-normal text-stone-400">Guide</span></span>
+    <div className="docs-theme min-h-screen" onPointerDown={createCursorBloom} onPointerMove={createCursorPetalTrail}>
+      <div ref={bloomLayerRef} className="cursor-bloom-layer" aria-hidden="true" />
+      <header className="landing-header">
+        <div className="landing-header-inner">
+          <a href="#start" className="landing-brand" aria-label="VOKAI home">
+            <span className="landing-brand-mark"><Sprout className="size-5" /></span>
+            <span>VOKAI</span>
           </a>
-          <div className="hidden items-center gap-3 sm:flex">
-            <a href="#developer" className="text-sm font-medium text-stone-600 hover:text-vokai-ink">For developers</a>
-            <Button asChild size="sm"><a href="#start">Start your journey <ArrowRight /></a></Button>
-          </div>
-          <Button variant="outline" size="icon" className="sm:hidden" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
+          <nav className="landing-nav" aria-label="Landing page navigation">
+            <a href="#product-tour">Features</a>
+            <a href="#progress">Progress</a>
+            <a href="#daily-journey">About</a>
+            <a href="#privacy">Contact</a>
+          </nav>
+          <a className="landing-journey-button" href="#daily-journey">Begin journey</a>
+          <Button variant="ghost" size="icon" className="landing-menu-button" onClick={() => setMenuOpen((open) => !open)} aria-label="Toggle documentation navigation">
             {menuOpen ? <X /> : <Menu />}
           </Button>
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[260px_minmax(0,1fr)]">
-        <aside className={`${menuOpen ? "block" : "hidden"} fixed inset-x-0 top-16 z-20 max-h-[calc(100dvh-4rem)] overflow-y-auto border-b border-stone-200 bg-[#F8F6F0] p-4 lg:sticky lg:top-16 lg:block lg:h-[calc(100vh-4rem)] lg:border-r lg:border-b-0 lg:px-5 lg:py-8`}>
+      <section ref={heroSectionRef} id="start" className="docs-hero" onPointerDown={activateHeroSound}>
+        <video ref={heroVideoRef} className="docs-hero-video" autoPlay loop playsInline controls={false} muted={!heroSoundEnabled} preload="auto" disablePictureInPicture disableRemotePlayback aria-hidden="true">
+          <source src={heroVideoUrl} type="video/mp4" />
+        </video>
+        <div className="docs-hero-scrim" aria-hidden="true" />
+        <div ref={heroContentRef} className="docs-hero-content">
+          <h1>Make room for <span>coding.</span></h1>
+          <p>AI-powered guidance for the coding life you already have. Choose a focused next step, learn steadily, and make every session count.</p>
+          <a className="landing-hero-cta" href="#daily-journey"><Play className="size-4 fill-current" /> Begin journey</a>
+        </div>
+        <a className="landing-scroll-cue" href="#guide" aria-label="Scroll to the VOKAI guide"><ChevronDown /></a>
+      </section>
+
+      <div ref={guideRevealRef} className={`docs-guide-shell mx-auto grid max-w-[1440px] ${sidebarHidden ? "lg:grid-cols-1" : "lg:grid-cols-[260px_minmax(0,1fr)]"}`}>
+        <aside id="docs-sidebar" className={`${menuOpen ? "block" : "hidden"} fixed inset-x-0 top-20 z-30 max-h-[calc(100dvh-5rem)] overflow-y-auto border-b border-stone-200 bg-[#F8F6F0] p-4 ${sidebarHidden ? "lg:hidden" : "lg:sticky lg:top-0 lg:block lg:h-screen lg:border-r lg:border-b-0 lg:px-5 lg:py-8"}`}>
           <p className="mb-3 px-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">For learners</p>
           <NavLinks items={learnerNavigation} onNavigate={closeMenu} />
           <p className="mb-3 mt-7 px-3 text-[11px] font-bold tracking-[0.16em] text-stone-400 uppercase">For developers</p>
@@ -161,20 +433,23 @@ function App() {
         </aside>
 
         <main className="min-w-0 px-4 py-10 sm:px-8 lg:px-14 lg:py-14">
-          <section id="start" className="scroll-mt-24 border-b border-stone-200 pb-16">
-            <StatusPill>Available today</StatusPill>
-            <h1 className="mt-6 max-w-4xl font-display text-5xl leading-[1.03] tracking-tight text-vokai-ink sm:text-6xl">Make room for coding in the life you <span className="text-vokai-forest">already have.</span></h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-stone-600">VOKAI helps you turn a vague goal—“I want to learn to code”—into one clear, manageable next step each day. It is built to lower the friction of starting and make your effort visible over time.</p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg"><a href="#daily-journey">See your daily flow <ArrowRight /></a></Button>
-              <Button asChild variant="outline" size="lg"><a href="#insights">Explore future focus insights <Sparkles /></a></Button>
+          <section id="guide" className="scroll-mt-6 border-b border-stone-200 pb-16">
+            <div className="mb-10 flex items-center justify-between gap-4 border-b border-stone-200 pb-4">
+              <div><p className="text-[11px] font-bold tracking-[0.16em] text-vokai-forest uppercase">The VOKAI guide</p><p className="mt-1 text-sm text-stone-500">Everything you need to build a steady coding rhythm.</p></div>
+              <Button variant="outline" size="sm" className="hidden lg:inline-flex" onClick={() => setSidebarHidden((hidden) => !hidden)} aria-controls="docs-sidebar" aria-expanded={!sidebarHidden}>
+                {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
+                {sidebarHidden ? "Show guide" : "Hide guide"}
+              </Button>
             </div>
+            <SectionTitle eyebrow="Start here" title="Build a calm, consistent coding practice.">VOKAI turns a vague goal into one clear, manageable next step each day—so practice can fit around the rest of your life.</SectionTitle>
             <div className="mt-12 grid gap-4 md:grid-cols-3">
               <FeatureCard icon={Rocket} title="Start without overwhelm" status="available">Your plan is broken into three small actions: learn, build, and reflect. You always know what comes next.</FeatureCard>
               <FeatureCard icon={Bot} title="Ask when you are stuck" status="available">Use Focus Coach for a smaller next step, an explanation, or a simple plan for the time you have right now.</FeatureCard>
               <FeatureCard icon={Sprout} title="See effort become momentum" status="available">Check-ins, streaks, and a growing garden make consistent practice easier to notice and celebrate.</FeatureCard>
             </div>
           </section>
+
+          <ProductTour />
 
           <section id="daily-journey" className="scroll-mt-24 border-b border-stone-200 py-16">
             <SectionTitle eyebrow="01 · Your daily journey" title="A gentle loop for making progress, even on busy days.">VOKAI is designed around the moments when you need to decide what to do with the next 10, 20, or 45 minutes—not around an ideal schedule you can never keep.</SectionTitle>

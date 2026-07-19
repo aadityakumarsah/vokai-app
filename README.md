@@ -31,7 +31,7 @@ vokai-app/
 │   └── ios/             Generated iOS development project
 ├── vokai-server/       FastAPI backend
 │   ├── app/             API implementation
-│   └── sql/             Supabase schema migrations (001–009)
+│   └── sql/             Supabase schema migrations (001–012)
 ├── compose.yaml         Docker Compose setup for server and web client
 └── README.md
 ```
@@ -98,7 +98,7 @@ At minimum, configure `DIRECT_URL`, `DATABASE_URL`, `SUPABASE_URL`, and `SUPABAS
 
 ### 2. Apply the database schema
 
-In the Supabase Dashboard, open **SQL Editor** and run these files in order. Run every file, including `009`:
+In the Supabase Dashboard, open **SQL Editor** and run these files in order. Run every file, including `012`:
 
 ```text
 vokai-server/sql/001_create_vokai_user_profiles.sql
@@ -110,6 +110,9 @@ vokai-server/sql/006_add_vokai_profile_updated_at_trigger.sql
 vokai-server/sql/007_add_vokai_language_and_routine.sql
 vokai-server/sql/008_add_vokai_syllabus.sql
 vokai-server/sql/009_add_vokai_routine_note.sql
+vokai-server/sql/010_add_vokai_friendships.sql
+vokai-server/sql/011_add_vokai_user_codes.sql
+vokai-server/sql/012_add_vokai_profile_images.sql
 ```
 
 The server checks these tables and required profile columns during startup. It intentionally stops if the schema is incomplete.
@@ -205,6 +208,7 @@ The main endpoints are:
 GET    /vokai/auth/config
 GET    /vokai/bootstrap
 PUT    /vokai/profile
+POST   /vokai/profile/photo
 GET    /vokai/garden
 GET    /vokai/check-ins/today
 GET    /vokai/check-ins/history
@@ -213,6 +217,10 @@ GET    /vokai/syllabus
 POST   /vokai/syllabus/generate
 PUT    /vokai/syllabus/topics
 POST   /vokai/focus/coach
+GET    /vokai/friends
+POST   /vokai/friends/requests
+PUT    /vokai/friends/requests/{requester_id}
+DELETE /vokai/friends/{friend_id}
 DELETE /vokai/journey
 ```
 
@@ -230,6 +238,9 @@ Protected endpoints require `Authorization: Bearer <supabase-access-token>`.
 | `SUPABASE_PUBLISHABLE_KEY` | Yes | Public Supabase key used to verify sessions |
 | `GEMINI_API_KEY` | No | Enables AI Focus Coach responses |
 | `GEMINI_MODEL` | No | Gemini model; defaults to `gemini-2.5-flash` |
+| `CLOUDINARY_CLOUD_NAME` | For profile photos | Cloudinary cloud name, configured only on the server |
+| `CLOUDINARY_API_KEY` | For profile photos | Cloudinary API key, configured only on the server |
+| `CLOUDINARY_API_SECRET` | For profile photos | Cloudinary API secret, configured only on the server |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins; defaults to `*` |
 
 ### Client: `vokai-client/.env`
@@ -268,9 +279,9 @@ npx expo export --platform web
 
 Run the server commands from `vokai-server`, not `vokai-client`.
 
-**The server exits with “Run vokai-server/sql/001 through 009”**
+**The server exits with “Run vokai-server/sql/001 through 012”**
 
-The Supabase schema is incomplete. Run all nine SQL migrations in order.
+The Supabase schema is incomplete. Run all twelve SQL migrations in order.
 
 **The mobile app cannot reach the server**
 

@@ -30,6 +30,12 @@
             "com.google.android.as"
           ]
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow VOKAI to access a profile photo."
+        }
       ]
     ],
     "experiments": {

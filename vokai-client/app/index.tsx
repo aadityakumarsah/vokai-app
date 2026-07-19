@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,9 +16,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Session, SupabaseClient, User } from '@supabase/supabase-js';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { GardenScene } from '../src/components/GardenScene';
+import { LeaderboardCity, type LeaderboardEntry } from '../src/components/LeaderboardCity';
+import { speechRecognitionModule } from '../src/speechRecognition';
 import { LANGUAGES, Language, LessonTask, MILESTONES, tasksForDay } from '../src/data';
 import { setDailyReminder } from '../src/notifications';
 import { BusyBlock, defaultProgress, ExperienceLevel, LearnerProfile, loadAppData, Progress, resetAppData, saveProfile, saveProgress } from '../src/storage';
@@ -26,9 +29,14 @@ import {
   fetchSupabaseAuthConfig,
   fetchVokaiSyllabus,
   fetchVokaiJourney,
+  fetchVokaiFriends,
+  fetchVokaiFriendProfile,
   askFocusCoach,
   generateVokaiSyllabus,
+  removeVokaiFriend,
   resetVokaiJourney,
+  respondToVokaiFriendRequest,
+  sendVokaiFriendRequest,
   syncVokaiCheckIn,
   syncVokaiProfile,
   syncVokaiSyllabusTopic,
@@ -36,10 +44,15 @@ import {
   type FocusCoachMessage,
   type JourneySnapshot,
   type RemoteCheckIn,
+  type Friend,
+  type FriendRequest,
+  type FriendProfile,
+  type FriendsSnapshot,
+  uploadVokaiProfilePhoto,
 } from '../src/vokaiApi';
 import { createVokaiSupabase, signInWithGoogle } from '../src/supabase';
 
-type Screen = 'home' | 'garden' | 'syllabus' | 'focus' | 'settings' | 'schedule';
+type Screen = 'home' | 'garden' | 'syllabus' | 'focus' | 'friends' | 'leaderboard' | 'profile' | 'friendProfile' | 'settings' | 'schedule';
 type OnboardingDraft = LearnerProfile;
 
 type IconProps = { size?: number; color?: string; fill?: string; strokeWidth?: number };
@@ -114,7 +127,7 @@ function localDateKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 }
 
-function calendarWeekTracker(history: RemoteCheckIn[]) {
+function calendarWeekTracker(history: Array<{ check_date: string; day_complete: boolean }>) {
   const today = new Date();
   const firstDay = new Date(today);
   firstDay.setDate(today.getDate() - today.getDay());
@@ -146,6 +159,7 @@ function profileFromSnapshot(snapshot: JourneySnapshot): LearnerProfile | null {
   if (!snapshot.profile) return null;
   return {
     name: snapshot.profile.name,
+    profileImageUrl: snapshot.profile.profile_image_url ?? undefined,
     language: snapshot.profile.language as Language,
     customLanguage: snapshot.profile.custom_language ?? undefined,
     experienceLevel: snapshot.profile.experience_level ?? 'beginner',
@@ -504,8 +518,17 @@ function BusyRoutineEditor({ busySchedule, dailyMinutes, onChange }: { busySched
   </View>;
 }
 
-function HomePage({ profile, progress, day, week, onToggleTask, onGarden, onFocus, onSettings }: {
-  profile: LearnerProfile; progress: Progress; day: number; week: RemoteCheckIn[]; onToggleTask: (taskId: string) => void; onGarden: () => void; onFocus: (task: LessonTask) => void; onSettings: () => void;
+function UserAvatar({ name, imageUrl, size }: { name: string; imageUrl?: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [imageUrl, name]);
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+  const fallbackUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || '?')}&background=F6C75A&color=263A2B&bold=true&size=160`;
+  if (failed) return <View style={[styles.userAvatarFallback, { width: size, height: size, borderRadius: size / 2 }]}><Text style={[styles.userAvatarFallbackText, { fontSize: Math.round(size * 0.42) }]}>{initial}</Text></View>;
+  return <Image accessibilityLabel={`${name || 'User'} profile photo`} source={{ uri: imageUrl || fallbackUrl }} onError={() => setFailed(true)} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.sun }} />;
+}
+
+function HomePage({ profile, progress, day, week, onToggleTask, onGarden, onFocus, onProfile, onSettings }: {
+  profile: LearnerProfile; progress: Progress; day: number; week: RemoteCheckIn[]; onToggleTask: (taskId: string) => void; onGarden: () => void; onFocus: (task: LessonTask) => void; onProfile: () => void; onSettings: () => void;
 }) {
   const tasks = tasksForDay(learningLanguage(profile), day, profile.experienceLevel);
   const completed = progress.tasksByDay[day] ?? [];
@@ -527,7 +550,7 @@ function HomePage({ profile, progress, day, week, onToggleTask, onGarden, onFocu
   return (
     <ScrollView contentContainerStyle={styles.checkinContent} showsVerticalScrollIndicator={false}>
       <View style={styles.checkinTopBar}>
-        <View style={styles.profileLeft}><View style={styles.profileAvatar}><Text style={styles.profileAvatarText}>{greeting.charAt(0).toUpperCase()}</Text></View><Text style={styles.profileGreeting}>Hey, {greeting}</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={onProfile} style={styles.profileLeft}><UserAvatar name={profile.name} imageUrl={profile.profileImageUrl} size={44} /><View><Text style={styles.profileGreeting}>Hey, {greeting}</Text><Text style={styles.profileHint}>View profile</Text></View></Pressable>
         <Pressable onPress={onSettings} style={[styles.checkinProgressPill, completed.length === 3 && styles.checkinProgressPillDone]}><Text style={[styles.checkinProgressText, completed.length === 3 && styles.checkinProgressTextDone]}>{completed.length} / 3 done</Text></Pressable>
       </View>
 
@@ -552,6 +575,101 @@ function HomePage({ profile, progress, day, week, onToggleTask, onGarden, onFocu
       </View>
     </ScrollView>
   );
+}
+
+function RewardBalance({ coins, points }: { coins: number; points: number }) {
+  return <View style={styles.rewardBalanceCard}>
+    <View style={styles.rewardBalanceItem}><View style={[styles.rewardBalanceIcon, { backgroundColor: '#FFF1CC' }]}><MaterialCommunityIcons name="currency-usd" size={19} color="#A46719" /></View><View><Text style={styles.rewardBalanceLabel}>COINS</Text><Text style={styles.rewardBalanceValue}>{coins}</Text></View></View>
+    <View style={styles.rewardBalanceDivider} />
+    <View style={styles.rewardBalanceItem}><View style={[styles.rewardBalanceIcon, { backgroundColor: colors.mint }]}><MaterialCommunityIcons name="star-four-points-outline" size={19} color={colors.forest} /></View><View><Text style={styles.rewardBalanceLabel}>POINTS</Text><Text style={styles.rewardBalanceValue}>{points}</Text></View></View>
+  </View>;
+}
+
+function ProfilePage({ profile, email, userCode, progress, day, week, friends, coins, points, onBack, onFriends, onUploadPhoto }: {
+  profile: LearnerProfile;
+  email: string;
+  userCode: string | null;
+  progress: Progress;
+  day: number;
+  week: RemoteCheckIn[];
+  friends: Friend[];
+  coins: number;
+  points: number;
+  onBack: () => void;
+  onFriends: () => void;
+  onUploadPhoto: (uri: string, mimeType?: string | null) => Promise<boolean>;
+}) {
+  const firstName = profile.name.trim().split(' ')[0] || 'Coder';
+  const completedToday = progress.tasksByDay[day]?.length ?? 0;
+  const history = week.length ? week : localWeek(day, progress);
+  const calendarWeek = useMemo(() => calendarWeekTracker(history), [history]);
+  const streak = useMemo(() => {
+    let result = 0;
+    for (let currentDay = day; currentDay >= 1 && progress.completedDays.includes(currentDay); currentDay -= 1) result += 1;
+    return result;
+  }, [day, progress.completedDays]);
+  const unlocked = MILESTONES.filter((milestone) => milestone.day <= day);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const chooseProfilePhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (result.canceled || !result.assets[0]) return;
+    setUploadingPhoto(true);
+    const uploaded = await onUploadPhoto(result.assets[0].uri, result.assets[0].mimeType);
+    setUploadingPhoto(false);
+    if (!uploaded) Alert.alert('Photo not uploaded', 'Please check your connection and try again.');
+  };
+  return <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.topRow}><IconButton label="Back to today" onPress={onBack}><ArrowLeft color={colors.ink} size={21} /></IconButton><Text style={styles.settingsTopLabel}>MY PROFILE</Text><View style={{ width: 42 }} /></View>
+    <View style={styles.profileHero}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Choose a profile photo" disabled={uploadingPhoto} onPress={() => void chooseProfilePhoto()} style={styles.profilePhotoButton}><UserAvatar name={profile.name} imageUrl={profile.profileImageUrl} size={61} /><View style={styles.profilePhotoEdit}><MaterialCommunityIcons name={uploadingPhoto ? 'loading' : 'camera-outline'} size={13} color="#fff" /></View></Pressable>
+      <View style={{ flex: 1 }}><Text style={styles.eyebrow}>CODING GARDENER</Text><Text style={styles.profileHeroName}>{profile.name || 'Coder'}</Text><Text style={styles.profileHeroLanguage}>{learningLanguage(profile)} · {profile.experienceLevel}</Text></View>
+    </View>
+
+    <View style={styles.profileIdCard}><View><Text style={styles.profileIdLabel}>YOUR VOKAI ID</Text><Text style={styles.profileIdValue}>{userCode ?? 'Creating your ID…'}</Text><Text style={styles.profileIdSub}>A unique 10-digit ID for your VOKAI account.</Text></View><View style={styles.profileIdIcon}><MaterialCommunityIcons name="card-account-details-outline" size={25} color={colors.forest} /></View></View>
+    <View style={styles.profileEmailCard}><View style={styles.profileEmailIcon}><MaterialCommunityIcons name="email-outline" size={18} color={colors.forest} /></View><View style={{ flex: 1 }}><Text style={styles.profileEmailLabel}>ACCOUNT EMAIL</Text><Text numberOfLines={1} style={styles.profileEmailValue}>{email || 'No email available'}</Text></View><MaterialCommunityIcons name="lock-outline" size={17} color={colors.muted} /></View>
+
+    <View style={styles.profileSectionRow}><Text style={styles.profileSectionTitle}>your rewards</Text><Text style={styles.profileSectionMeta}>Earned from check-ins</Text></View>
+    <RewardBalance coins={coins} points={points} />
+    <View style={styles.rewardHint}><MaterialCommunityIcons name="gift-outline" size={17} color={colors.forest} /><Text style={styles.rewardHintText}>Every completed day earns 10 coins + 5 points. Bonus rewards unlock on days 2, 3, 4, 10, and 60.</Text></View>
+
+    <Text style={styles.profileSectionTitle}>your journey</Text>
+    <View style={styles.profileStatsGrid}><Stat number={`Day ${day}`} label="of 90 days" /><Stat number={streak} label="day streak" /><Stat number={`${completedToday}/3`} label="today done" /></View>
+    <View style={styles.profileLanguageCard}><View style={styles.profileLanguageIcon}><MaterialCommunityIcons name="code-tags" size={21} color={colors.forest} /></View><View style={{ flex: 1 }}><Text style={styles.profileLanguageTitle}>{learningLanguage(profile)}</Text><Text style={styles.profileLanguageSub}>{profile.experienceLevel.charAt(0).toUpperCase() + profile.experienceLevel.slice(1)} learner · {profile.dailyMinutes} min daily plan</Text></View></View>
+
+    <View style={styles.profileSectionRow}><Text style={styles.profileSectionTitle}>daily check-ins</Text><Text style={styles.profileSectionMeta}>Day {day}</Text></View>
+    <View style={styles.profileCheckinCard}>{calendarWeek.map((calendarDay) => {
+      const done = calendarDay.checkIn?.day_complete || (calendarDay.isToday && completedToday === 3);
+      return <View style={styles.profileCheckinDay} key={calendarDay.key}><View style={[styles.profileCheckinDot, done && styles.profileCheckinDotDone, calendarDay.isToday && styles.profileCheckinDotToday]}>{done && <Check size={12} color="#fff" />}</View><Text style={[styles.profileCheckinLabel, calendarDay.isToday && styles.profileCheckinLabelToday]}>{calendarDay.isToday ? 'Today' : calendarDay.label}</Text></View>;
+    })}</View>
+
+    <View style={styles.profileSectionRow}><Text style={styles.profileSectionTitle}>friends</Text><Pressable accessibilityRole="button" accessibilityLabel="Open friends" onPress={onFriends}><Text style={styles.profileSectionLink}>See all</Text></Pressable></View>
+    {friends.length === 0 ? <Pressable onPress={onFriends} style={styles.profileFriendsEmpty}><MaterialCommunityIcons name="account-plus-outline" size={20} color={colors.forest} /><Text style={styles.profileFriendsEmptyText}>Add friends to share your learning journey.</Text><ChevronRight size={18} color={colors.muted} /></Pressable> : <Pressable onPress={onFriends} style={styles.profileFriendsCard}>{friends.slice(0, 4).map((friend) => <View key={friend.id} style={styles.profileFriendAvatar}><Text style={styles.profileFriendAvatarText}>{friend.name.charAt(0).toUpperCase()}</Text></View>)}{friends.length > 4 && <View style={styles.profileFriendMore}><Text style={styles.profileFriendMoreText}>+{friends.length - 4}</Text></View>}<Text style={styles.profileFriendsText}>{friends.length} {friends.length === 1 ? 'friend' : 'friends'} learning with you</Text><ChevronRight size={18} color={colors.muted} /></Pressable>}
+
+    <View style={styles.profileSectionRow}><Text style={styles.profileSectionTitle}>garden achievements</Text><Text style={styles.profileSectionMeta}>{unlocked.length}/{MILESTONES.length} unlocked</Text></View>
+    <View style={styles.profileAchievementsCard}>{MILESTONES.map((milestone) => {
+      const achieved = milestone.day <= day;
+      return <View key={milestone.day} style={[styles.profileAchievement, !achieved && styles.profileAchievementLocked]}><View style={[styles.profileAchievementIcon, achieved && styles.profileAchievementIconDone]}><Text>{achieved ? '✓' : milestone.icon}</Text></View><Text style={[styles.profileAchievementTitle, !achieved && styles.profileAchievementTitleLocked]}>{milestone.title}</Text><Text style={styles.profileAchievementDay}>D{milestone.day}</Text></View>;
+    })}</View>
+  </ScrollView>;
+}
+
+function FriendProfilePage({ friend, onBack }: { friend: FriendProfile; onBack: () => void }) {
+  const calendarWeek = useMemo(() => calendarWeekTracker(friend.week), [friend.week]);
+  return <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.topRow}><IconButton label="Back to friends" onPress={onBack}><ArrowLeft color={colors.ink} size={21} /></IconButton><Text style={styles.settingsTopLabel}>FRIEND PROFILE</Text><View style={{ width: 42 }} /></View>
+    <View style={styles.friendProfileHero}><UserAvatar name={friend.name} imageUrl={friend.profile_image_url ?? undefined} size={68} /><View style={{ flex: 1 }}><Text style={styles.eyebrow}>LEARNING BUDDY</Text><Text style={styles.profileHeroName}>{friend.name}</Text><Text style={styles.profileHeroLanguage}>{friend.language} · {friend.experience_level}</Text></View></View>
+    <RewardBalance coins={friend.coins} points={friend.points} />
+    <Text style={styles.profileSectionTitle}>their journey</Text>
+    <View style={styles.profileStatsGrid}><Stat number={`Day ${friend.journey_day}`} label="of 90 days" /><Stat number={friend.current_streak} label="day streak" /><Stat number={friend.completed_days} label="days checked in" /></View>
+    <View style={styles.profileLanguageCard}><View style={styles.profileLanguageIcon}><MaterialCommunityIcons name="code-tags" size={21} color={colors.forest} /></View><View style={{ flex: 1 }}><Text style={styles.profileLanguageTitle}>{friend.language}</Text><Text style={styles.profileLanguageSub}>{friend.experience_level.charAt(0).toUpperCase() + friend.experience_level.slice(1)} learner · {friend.daily_minutes} min daily plan</Text></View></View>
+    <View style={styles.profileSectionRow}><Text style={styles.profileSectionTitle}>daily check-ins</Text><Text style={styles.profileSectionMeta}>{friend.current_streak} day streak</Text></View>
+    <View style={styles.profileCheckinCard}>{calendarWeek.map((calendarDay) => <View style={styles.profileCheckinDay} key={calendarDay.key}><View style={[styles.profileCheckinDot, calendarDay.checkIn?.day_complete && styles.profileCheckinDotDone, calendarDay.isToday && styles.profileCheckinDotToday]}>{calendarDay.checkIn?.day_complete && <Check size={12} color="#fff" />}</View><Text style={[styles.profileCheckinLabel, calendarDay.isToday && styles.profileCheckinLabelToday]}>{calendarDay.isToday ? 'Today' : calendarDay.label}</Text></View>)}</View>
+    <View style={styles.profileSectionRow}><Text style={styles.profileSectionTitle}>garden achievements</Text><Text style={styles.profileSectionMeta}>{friend.unlocked.length}/{MILESTONES.length} unlocked</Text></View>
+    <View style={styles.profileAchievementsCard}>{MILESTONES.map((milestone) => {
+      const achieved = friend.unlocked.some((unlocked) => unlocked.day === milestone.day);
+      return <View key={milestone.day} style={[styles.profileAchievement, !achieved && styles.profileAchievementLocked]}><View style={[styles.profileAchievementIcon, achieved && styles.profileAchievementIconDone]}><Text>{achieved ? '✓' : milestone.icon}</Text></View><Text style={[styles.profileAchievementTitle, !achieved && styles.profileAchievementTitleLocked]}>{milestone.title}</Text><Text style={styles.profileAchievementDay}>D{milestone.day}</Text></View>;
+    })}</View>
+  </ScrollView>;
 }
 
 function CoachInlineText({ text }: { text: string }) {
@@ -608,45 +726,56 @@ function FocusPage({ task, profile, day, completedCount, completed, accessToken,
   useEffect(() => {
     chatScrollRef.current?.scrollToEnd({ animated: true });
   }, [messages, sending]);
-  useSpeechRecognitionEvent('start', () => {
-    setListening(true);
-    setVoiceStatus('Listening… Tap the microphone when you are finished.');
-  });
-  useSpeechRecognitionEvent('end', () => {
-    setListening(false);
-    setVoiceStatus(null);
-  });
-  useSpeechRecognitionEvent('result', (event) => {
-    const transcript = event.results[0]?.transcript.trim();
-    if (!transcript) return;
-    const prefix = draftBeforeVoiceRef.current;
-    setDraft(prefix ? `${prefix} ${transcript}` : transcript);
-  });
-  useSpeechRecognitionEvent('error', (event) => {
-    setListening(false);
-    if (event.error === 'aborted') return;
-    setVoiceStatus(event.error === 'no-speech' || event.error === 'speech-timeout' ? 'I did not hear anything. Try speaking again.' : 'Voice typing is unavailable. Check your microphone permission and try again.');
-  });
-  useEffect(() => () => {
-    ExpoSpeechRecognitionModule.abort();
+  useEffect(() => {
+    const speech = speechRecognitionModule;
+    if (!speech) return;
+    const subscriptions = [
+      speech.addListener('start', () => {
+        setListening(true);
+        setVoiceStatus('Listening… Tap the microphone when you are finished.');
+      }),
+      speech.addListener('end', () => {
+        setListening(false);
+        setVoiceStatus(null);
+      }),
+      speech.addListener('result', (event: { results?: Array<{ transcript?: string }> }) => {
+        const transcript = event.results?.[0]?.transcript?.trim();
+        if (!transcript) return;
+        const prefix = draftBeforeVoiceRef.current;
+        setDraft(prefix ? `${prefix} ${transcript}` : transcript);
+      }),
+      speech.addListener('error', (event: { error?: string }) => {
+        setListening(false);
+        if (event.error === 'aborted') return;
+        setVoiceStatus(event.error === 'no-speech' || event.error === 'speech-timeout' ? 'I did not hear anything. Try speaking again.' : 'Voice typing is unavailable. Check your microphone permission and try again.');
+      }),
+    ];
+    return () => {
+      subscriptions.forEach((subscription) => subscription.remove());
+      speech.abort();
+    };
   }, []);
   const toggleVoiceInput = async () => {
     if (sending) return;
-    if (listening) {
-      ExpoSpeechRecognitionModule.stop();
+    if (!speechRecognitionModule) {
+      setVoiceStatus('Voice typing needs a rebuilt VOKAI development app. Run npm run android, then open that app instead of Expo Go.');
       return;
     }
-    if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
+    if (listening) {
+      speechRecognitionModule.stop();
+      return;
+    }
+    if (!speechRecognitionModule.isRecognitionAvailable()) {
       setVoiceStatus('Speech recognition is not available on this device.');
       return;
     }
-    const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    const permission = await speechRecognitionModule.requestPermissionsAsync();
     if (!permission.granted) {
       setVoiceStatus('Allow microphone and speech recognition access to use voice typing.');
       return;
     }
     draftBeforeVoiceRef.current = draft.trim();
-    ExpoSpeechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false, addsPunctuation: true, iosTaskHint: 'dictation' });
+    speechRecognitionModule.start({ lang: 'en-US', interimResults: true, continuous: false, addsPunctuation: true, iosTaskHint: 'dictation' });
   };
   const sendMessage = async (text: string) => {
     const message = text.trim();
@@ -717,6 +846,119 @@ function ScheduleManagerPage({ profile, onChange, onBack }: { profile: LearnerPr
     <View style={styles.scheduleCard}><BusyRoutineEditor busySchedule={profile.busySchedule} dailyMinutes={profile.dailyMinutes} onChange={updateRoutine} /></View>
     <View style={styles.schedulePlanHeader}><View><Text style={styles.schedulePlanEyebrow}>YOUR DAILY PLAN</Text><Text style={styles.schedulePlanTitle}>Best time: {formatTime12(profile.freeTime)}</Text></View><View style={styles.schedulePlanBadge}><Text style={styles.schedulePlanBadgeText}>{profile.dailyMinutes} MIN</Text></View></View>
     <View style={styles.schedulePlanCard}>{plan.map((item, index) => <View key={item.title} style={[styles.schedulePlanItem, index !== plan.length - 1 && styles.schedulePlanDivider]}><Text style={styles.schedulePlanTime}>{item.time}</Text><View style={styles.schedulePlanIcon}><MaterialCommunityIcons name={item.icon} size={17} color={colors.forest} /></View><View style={{ flex: 1 }}><Text style={styles.schedulePlanItemTitle}>{item.title}</Text><Text style={styles.schedulePlanItemSub}>{item.detail}</Text></View></View>)}</View>
+  </ScrollView>;
+}
+
+function FriendAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
+  return <UserAvatar name={name} imageUrl={imageUrl ?? undefined} size={43} />;
+}
+
+function FriendsPage({ friends, requests, loading, onRefresh, onSendRequest, onRespond, onRemove, onVisit, onLeaderboard }: {
+  friends: Friend[];
+  requests: FriendRequest[];
+  loading: boolean;
+  onRefresh: () => Promise<boolean>;
+  onSendRequest: (email: string) => Promise<boolean>;
+  onRespond: (requesterId: string, action: 'accept' | 'decline') => Promise<boolean>;
+  onRemove: (friendId: string) => Promise<boolean>;
+  onVisit: (friend: Friend) => void;
+  onLeaderboard: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const sendRequest = async () => {
+    const cleanEmail = email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) {
+      Alert.alert('Enter an email', 'Use the email address your friend uses for their VOKAI account.');
+      return;
+    }
+    setSubmitting(true);
+    const sent = await onSendRequest(cleanEmail);
+    setSubmitting(false);
+    if (sent) {
+      setEmail('');
+      Alert.alert('Request sent', 'Your friend will appear here once they accept.');
+    } else {
+      Alert.alert('Could not send request', 'Check that your friend has a VOKAI account and try again.');
+    }
+  };
+  const respond = async (requesterId: string, action: 'accept' | 'decline') => {
+    setRespondingId(requesterId);
+    const updated = await onRespond(requesterId, action);
+    setRespondingId(null);
+    if (!updated) Alert.alert('Could not update request', 'Please refresh and try again.');
+  };
+  const remove = (friend: Friend) => Alert.alert(
+    'Remove friend?',
+    `${friend.name} will no longer be in your friends list.`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => void onRemove(friend.id) },
+    ],
+  );
+  return <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <View style={styles.topRow}>
+      <View style={styles.friendsTopIdentity}><View style={styles.friendsTopIcon}><MaterialCommunityIcons name="account-group-outline" size={20} color={colors.forest} /></View><Text style={styles.settingsTopLabel}>FRIENDS</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Refresh friends" disabled={loading} onPress={() => void onRefresh()} style={[styles.friendsRefreshButton, loading && styles.friendsRefreshButtonDisabled]}><MaterialCommunityIcons name={loading ? 'loading' : 'refresh'} size={19} color={colors.forest} /></Pressable>
+    </View>
+    <Heading eyebrow="LEARNING TOGETHER" title="your coding circle" sub="Add VOKAI friends, celebrate their streaks, and keep each other going." />
+
+    <Pressable accessibilityRole="button" accessibilityLabel="Open the points leaderboard" onPress={onLeaderboard} style={styles.leaderboardLaunchCard}>
+      <View style={styles.leaderboardLaunchIcon}><MaterialCommunityIcons name="city-variant-outline" size={25} color="#fff" /></View>
+      <View style={{ flex: 1 }}><Text style={styles.leaderboardLaunchEyebrow}>POINTS LEADERBOARD</Text><Text style={styles.leaderboardLaunchTitle}>Explore your learning city</Text><Text style={styles.leaderboardLaunchSub}>Every friend gets a building. More points make it taller.</Text></View>
+      <View style={styles.leaderboardLaunchArrow}><ChevronRight size={22} color={colors.forest} /></View>
+    </Pressable>
+
+    <View style={styles.addFriendCard}>
+      <View style={styles.addFriendHeading}><View style={styles.addFriendIcon}><MaterialCommunityIcons name="account-plus-outline" size={19} color={colors.forest} /></View><View style={{ flex: 1 }}><Text style={styles.addFriendTitle}>Add a friend</Text><Text style={styles.addFriendSub}>Send a request using their VOKAI account email.</Text></View></View>
+      <View style={styles.addFriendForm}><TextInput autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} onSubmitEditing={() => void sendRequest()} editable={!submitting} placeholder="friend@example.com" placeholderTextColor={colors.muted} style={styles.addFriendInput} returnKeyType="send" /><Pressable accessibilityRole="button" accessibilityLabel="Send friend request" disabled={submitting} onPress={() => void sendRequest()} style={[styles.addFriendButton, submitting && styles.addFriendButtonDisabled]}><MaterialCommunityIcons name={submitting ? 'loading' : 'send-outline'} size={18} color="#fff" /></Pressable></View>
+    </View>
+
+    {requests.length > 0 && <>
+      <View style={styles.friendsSectionTitleRow}><Text style={styles.friendsSectionTitle}>friend requests</Text><View style={styles.requestCount}><Text style={styles.requestCountText}>{requests.length}</Text></View></View>
+      <View style={styles.friendListCard}>{requests.map((request, index) => <View key={request.id} style={[styles.requestRow, index !== requests.length - 1 && styles.friendRowDivider]}><FriendAvatar name={request.name} imageUrl={request.profile_image_url} /><View style={styles.friendCopy}><Text style={styles.friendName}>{request.name}</Text><Text style={styles.friendMeta}>{request.language} · Day {request.journey_day} · {request.current_streak} day streak</Text></View><View style={styles.requestActions}><Pressable accessibilityRole="button" accessibilityLabel={`Accept ${request.name}'s friend request`} disabled={respondingId === request.id} onPress={() => void respond(request.id, 'accept')} style={[styles.acceptFriendButton, respondingId === request.id && styles.friendActionDisabled]}><MaterialCommunityIcons name="check" size={17} color="#fff" /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Decline ${request.name}'s friend request`} disabled={respondingId === request.id} onPress={() => void respond(request.id, 'decline')} style={[styles.declineFriendButton, respondingId === request.id && styles.friendActionDisabled]}><MaterialCommunityIcons name="close" size={17} color={colors.red} /></Pressable></View></View>)}</View>
+    </>}
+
+    <View style={styles.friendsSectionTitleRow}><Text style={styles.friendsSectionTitle}>your friends</Text><Text style={styles.friendTotal}>{friends.length} {friends.length === 1 ? 'friend' : 'friends'}</Text></View>
+    {loading && friends.length === 0 ? <View style={styles.friendsEmpty}><MaterialCommunityIcons name="loading" size={27} color={colors.forest} /><Text style={styles.friendsEmptyTitle}>Loading your circle…</Text></View> : friends.length === 0 ? <View style={styles.friendsEmpty}><View style={styles.friendsEmptyIcon}><MaterialCommunityIcons name="account-heart-outline" size={26} color={colors.forest} /></View><Text style={styles.friendsEmptyTitle}>Invite a learning buddy</Text><Text style={styles.friendsEmptySub}>When they accept your request, their VOKAI journey and current streak will show up here.</Text></View> : <View style={styles.friendListCard}>{friends.map((friend, index) => <View key={friend.id} style={[styles.friendRow, index !== friends.length - 1 && styles.friendRowDivider]}><Pressable accessibilityRole="button" accessibilityLabel={`View ${friend.name}'s profile`} onPress={() => onVisit(friend)} style={styles.friendVisit}><FriendAvatar name={friend.name} imageUrl={friend.profile_image_url} /><View style={styles.friendCopy}><Text style={styles.friendName}>{friend.name}</Text><Text style={styles.friendMeta}>{friend.language}</Text><View style={styles.friendStats}><View style={styles.friendStatPill}><MaterialCommunityIcons name="calendar-blank-outline" size={12} color={colors.forest} /><Text style={styles.friendStatText}>Day {friend.journey_day}</Text></View><View style={styles.friendStatPill}><MaterialCommunityIcons name="fire" size={12} color="#B66D22" /><Text style={styles.friendStatText}>{friend.current_streak} streak</Text></View></View></View><ChevronRight size={21} color={colors.muted} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${friend.name} from friends`} onPress={() => remove(friend)} style={styles.removeFriendButton}><MaterialCommunityIcons name="account-minus-outline" size={18} color={colors.muted} /></Pressable></View>)}</View>}
+  </ScrollView>;
+}
+
+function LeaderboardPage({ profile, points, friends, onBack, onOpenFriend, onOpenSelf }: {
+  profile: LearnerProfile;
+  points: number;
+  friends: Friend[];
+  onBack: () => void;
+  onOpenFriend: (friend: Friend) => void;
+  onOpenSelf: () => void;
+}) {
+  const entries = useMemo<LeaderboardEntry[]>(() => [
+    { id: 'me', name: profile.name || 'You', points, profileImageUrl: profile.profileImageUrl, isCurrentUser: true },
+    ...friends.map((friend) => ({ id: friend.id, name: friend.name, points: friend.points ?? 0, profileImageUrl: friend.profile_image_url ?? undefined })),
+  ], [friends, points, profile.name, profile.profileImageUrl]);
+  const openEntry = (entry: LeaderboardEntry) => {
+    if (entry.isCurrentUser) {
+      onOpenSelf();
+      return;
+    }
+    const friend = friends.find((candidate) => candidate.id === entry.id);
+    if (friend) onOpenFriend(friend);
+  };
+  const ranked = [...entries].sort((left, right) => right.points - left.points || left.name.localeCompare(right.name));
+  const maxPoints = Math.max(...ranked.map((entry) => entry.points), 1);
+  const rankColor = (index: number) => ['#FFA116', '#C0C0C0', '#818CF8', '#2CBB5D', '#FB923C', '#22D3EE'][index % 6];
+  return <ScrollView style={styles.leaderboardScreen} contentContainerStyle={styles.leaderboardContent} showsVerticalScrollIndicator={false}>
+    <View style={styles.leaderboardTopRow}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back to friends" onPress={onBack} style={styles.leaderboardBack}><ArrowLeft color={colors.ink} size={21} /></Pressable>
+      <View style={styles.leaderboardTopIdentity}><View style={styles.leaderboardTopIcon}><MaterialCommunityIcons name="trophy-outline" size={18} color="#C47A17" /></View><View><Text style={styles.leaderboardTopEyebrow}>YOUR LEARNING CIRCLE</Text><Text style={styles.leaderboardTopTitle}>Live leaderboard</Text></View></View>
+      <View style={styles.leaderboardTopLive}><View style={styles.leaderboardTopLiveDot} /><Text style={styles.leaderboardTopLiveText}>LIVE</Text></View>
+    </View>
+    <View style={styles.leaderboardHero}><Text style={styles.leaderboardHeroEyebrow}>GLOBAL STANDINGS</Text><Text style={styles.leaderboardHeroTitle}>score city</Text><Text style={styles.leaderboardHeroSub}>Your learning points build the city. Drag the scene to explore every tower.</Text></View>
+    <LeaderboardCity entries={entries} onSelect={openEntry} />
+    <View style={styles.leaderboardPrivacyNote}><MaterialCommunityIcons name="shield-check-outline" size={16} color="#2CBB5D" /><Text style={styles.leaderboardPrivacyText}>Only you and accepted friends appear in this private leaderboard.</Text></View>
+    <View style={styles.leaderboardRankHeading}><View><Text style={styles.leaderboardRankTitle}>city rankings</Text><Text style={styles.leaderboardRankSub}>Live points · tallest scores</Text></View><View style={styles.leaderboardRankCount}><Text style={styles.leaderboardRankCountText}>{ranked.length}</Text></View></View>
+    <View style={styles.leaderboardRankList}>{ranked.map((entry, index) => <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`View ${entry.name}'s building`} onPress={() => openEntry(entry)} style={[styles.leaderboardRankRow, index !== ranked.length - 1 && styles.leaderboardRankDivider, entry.isCurrentUser && styles.leaderboardRankRowCurrent]}><View style={[styles.leaderboardRankNumber, { borderColor: rankColor(index) }]}><Text style={[styles.leaderboardRankNumberText, { color: rankColor(index) }]}>{index + 1}</Text></View><UserAvatar name={entry.name} imageUrl={entry.profileImageUrl} size={39} /><View style={{ flex: 1, minWidth: 0 }}><View style={styles.leaderboardNameRow}><Text numberOfLines={1} style={styles.leaderboardRankName}>{entry.isCurrentUser ? 'You' : entry.name}</Text>{index === 0 && <MaterialCommunityIcons name="crown" size={13} color="#FFA116" />}</View><Text style={styles.leaderboardRankMeta}>{index === 0 ? 'Grand tower' : `Rank ${index + 1} tower`}</Text><View style={styles.leaderboardBarTrack}><View style={[styles.leaderboardBarFill, { width: `${Math.max(5, (entry.points / maxPoints) * 100)}%`, backgroundColor: rankColor(index) }]} /></View></View><View style={styles.leaderboardPointPill}><MaterialCommunityIcons name="star-four-points" size={12} color={entry.isCurrentUser ? '#FFA116' : '#2CBB5D'} /><Text style={styles.leaderboardPointText}>{entry.points.toLocaleString()}</Text></View></Pressable>)}</View>
   </ScrollView>;
 }
 
@@ -828,6 +1070,7 @@ function TabBar({ screen, setScreen }: { screen: Screen; setScreen: (screen: Scr
     { key: 'home', label: 'Today', icon: 'calendar-check-outline' },
     { key: 'syllabus', label: 'Syllabus', icon: 'book-open-page-variant-outline' },
     { key: 'focus', label: 'Focus', icon: 'message-processing-outline' },
+    { key: 'friends', label: 'Friends', icon: 'account-group-outline' },
     { key: 'settings', label: 'Settings', icon: 'cog-outline' },
   ];
   return <View style={styles.tabBar}>{tabs.map((tab) => { const active = screen === tab.key; return <Pressable key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: active }} onPress={() => setScreen(tab.key)} style={styles.tab}><View style={[styles.tabIcon, active && styles.tabIconActive]}><MaterialCommunityIcons name={tab.icon} size={21} color={active ? colors.forest : colors.muted} /></View><Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text></Pressable>; })}</View>;
@@ -847,6 +1090,12 @@ export default function VokaiApp() {
   const [serverWeek, setServerWeek] = useState<RemoteCheckIn[]>([]);
   const [syllabus, setSyllabus] = useState<Syllabus | null>(null);
   const [syllabusLoading, setSyllabusLoading] = useState(false);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [userCode, setUserCode] = useState<string | null>(null);
+  const [wallet, setWallet] = useState({ coins: 0, points: 0 });
+  const [selectedFriendProfile, setSelectedFriendProfile] = useState<FriendProfile | null>(null);
   const userId = session?.user.id ?? '';
   const accessToken = session?.access_token ?? '';
   const day = serverDay ?? courseDay(progress.startedAt);
@@ -892,6 +1141,8 @@ export default function VokaiApp() {
       if (!active) return;
       setProfile(savedProfile);
       setProgress(savedProgress);
+      setUserCode(remoteSnapshot?.profile?.user_code ? String(remoteSnapshot.profile.user_code) : null);
+      setWallet({ coins: remoteSnapshot?.profile?.coins ?? 0, points: remoteSnapshot?.profile?.points ?? 0 });
       setServerDay(remoteSnapshot?.journey_day ?? null);
       setServerWeek(remoteSnapshot?.week ?? []);
       setLoading(false);
@@ -903,11 +1154,17 @@ export default function VokaiApp() {
   const applySnapshot = (snapshot: JourneySnapshot) => {
     setServerDay(snapshot.journey_day);
     setServerWeek(snapshot.week);
+    if (snapshot.profile?.user_code) setUserCode(String(snapshot.profile.user_code));
+    if (snapshot.profile) setWallet({ coins: snapshot.profile.coins ?? 0, points: snapshot.profile.points ?? 0 });
     setProgress((previous) => {
       const next = mergeProgressWithSnapshot(previous, snapshot);
       if (userId) void saveProgress(userId, next);
       return next;
     });
+  };
+  const applyFriendsSnapshot = (snapshot: FriendsSnapshot) => {
+    setFriends(snapshot.friends);
+    setFriendRequests(snapshot.incoming_requests);
   };
   useEffect(() => {
     if (!profile || !accessToken) return;
@@ -941,6 +1198,19 @@ export default function VokaiApp() {
     })();
     return () => { active = false; };
   }, [accessToken, profile?.customLanguage, profile?.experienceLevel, profile?.language]);
+  const refreshFriends = async () => {
+    if (!accessToken) return false;
+    setFriendsLoading(true);
+    const snapshot = await fetchVokaiFriends(accessToken);
+    setFriendsLoading(false);
+    if (!snapshot) return false;
+    applyFriendsSnapshot(snapshot);
+    return true;
+  };
+  useEffect(() => {
+    if (!profile || !accessToken) return;
+    void refreshFriends();
+  }, [accessToken, profile?.name]);
   const toggleTask = (taskId: string) => {
     if (!profile) return;
     const current = progress.tasksByDay[day] ?? [];
@@ -965,25 +1235,69 @@ export default function VokaiApp() {
     setSyllabus((previous) => previous ? { ...previous, topics: previous.topics.map((topic) => topic.id === topicId ? { ...topic, completed } : topic) } : previous);
     if (accessToken) void syncVokaiSyllabusTopic(accessToken, topicId, completed).then((next) => { if (next) setSyllabus(next); });
   };
+  const sendFriendRequest = async (email: string) => {
+    if (!accessToken) return false;
+    const snapshot = await sendVokaiFriendRequest(accessToken, email);
+    if (!snapshot) return false;
+    applyFriendsSnapshot(snapshot);
+    return true;
+  };
+  const respondToFriendRequest = async (requesterId: string, action: 'accept' | 'decline') => {
+    if (!accessToken) return false;
+    const snapshot = await respondToVokaiFriendRequest(accessToken, requesterId, action);
+    if (!snapshot) return false;
+    applyFriendsSnapshot(snapshot);
+    return true;
+  };
+  const removeFriend = async (friendId: string) => {
+    if (!accessToken) return false;
+    const snapshot = await removeVokaiFriend(accessToken, friendId);
+    if (!snapshot) return false;
+    applyFriendsSnapshot(snapshot);
+    return true;
+  };
+  const openFriendProfile = async (friend: Friend) => {
+    if (!accessToken) return;
+    const remoteProfile = await fetchVokaiFriendProfile(accessToken, friend.id);
+    if (!remoteProfile) {
+      Alert.alert('Profile unavailable', 'This friend profile could not be opened. Refresh your friends and try again.');
+      return;
+    }
+    setSelectedFriendProfile(remoteProfile);
+    setScreen('friendProfile');
+  };
+  const uploadProfilePhoto = async (uri: string, mimeType?: string | null) => {
+    if (!accessToken || !profile) return false;
+    const remoteProfile = await uploadVokaiProfilePhoto(accessToken, uri, mimeType);
+    if (!remoteProfile?.profile_image_url) return false;
+    const nextProfile = { ...profile, profileImageUrl: remoteProfile.profile_image_url };
+    setProfile(nextProfile);
+    if (userId) await saveProfile(userId, nextProfile);
+    return true;
+  };
   const finishOnboarding = async (nextProfile: LearnerProfile) => { setProfile(nextProfile); if (userId) await saveProfile(userId, nextProfile); syncProfile(nextProfile); if (nextProfile.reminders) { const granted = await setDailyReminder(true, nextProfile.freeTime); if (!granted) { const withoutReminder = { ...nextProfile, reminders: false }; setProfile(withoutReminder); if (userId) await saveProfile(userId, withoutReminder); syncProfile(withoutReminder); Alert.alert('Reminder not enabled', 'You can turn it on later from Settings after allowing notifications.'); } } };
   const updateProfile = async (next: LearnerProfile) => { setProfile(next); if (userId) await saveProfile(userId, next); syncProfile(next); const enabled = await setDailyReminder(next.reminders, next.freeTime); if (next.reminders && !enabled) Alert.alert('Notifications need permission', 'Allow notifications in Android Settings to receive your daily learning reminder.'); };
-  const resetJourney = () => Alert.alert('Reset journey?', 'This clears your routine and check-ins, deletes your saved syllabus, and starts a fresh garden for this account.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Reset', style: 'destructive', onPress: async () => { await setDailyReminder(false, '19:00'); if (accessToken) await resetVokaiJourney(accessToken); if (userId) await resetAppData(userId); setProfile(null); setProgress(defaultProgress()); setServerDay(null); setServerWeek([]); setSyllabus(null); setScreen('home'); } }]);
-  const signOut = async () => { await setDailyReminder(false, profile?.freeTime ?? '19:00'); await supabase?.auth.signOut(); setProfile(null); setProgress(defaultProgress()); setServerDay(null); setServerWeek([]); setSyllabus(null); setScreen('home'); };
+  const resetJourney = () => Alert.alert('Reset journey?', 'This clears your routine and check-ins, deletes your saved syllabus, and starts a fresh garden for this account.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Reset', style: 'destructive', onPress: async () => { await setDailyReminder(false, '19:00'); if (accessToken) await resetVokaiJourney(accessToken); if (userId) await resetAppData(userId); setProfile(null); setProgress(defaultProgress()); setServerDay(null); setServerWeek([]); setSyllabus(null); setFriends([]); setFriendRequests([]); setUserCode(null); setWallet({ coins: 0, points: 0 }); setSelectedFriendProfile(null); setScreen('home'); } }]);
+  const signOut = async () => { await setDailyReminder(false, profile?.freeTime ?? '19:00'); await supabase?.auth.signOut(); setProfile(null); setProgress(defaultProgress()); setServerDay(null); setServerWeek([]); setSyllabus(null); setFriends([]); setFriendRequests([]); setUserCode(null); setWallet({ coins: 0, points: 0 }); setSelectedFriendProfile(null); setScreen('home'); };
   if (authLoading) return <SafeAreaView style={styles.loading}><Text style={styles.brandText}>VOKAI</Text><Text style={styles.loadingText}>Opening your garden…</Text></SafeAreaView>;
   if (!session) return <AuthPage supabase={supabase} configurationError={authError} />;
   if (loading) return <SafeAreaView style={styles.loading}><Text style={styles.brandText}>VOKAI</Text><Text style={styles.loadingText}>Preparing your garden…</Text></SafeAreaView>;
   if (!profile) return <Onboarding onFinish={finishOnboarding} suggestedName={authFirstName(session.user)} />;
   const tasks = tasksForDay(learningLanguage(profile), day, profile.experienceLevel);
   const selectedTask = activeTask ?? tasks.find((task) => !(progress.tasksByDay[day] ?? []).includes(task.id)) ?? tasks[0];
-  const content = screen === 'home' ? <HomePage profile={profile} progress={progress} day={day} week={serverWeek} onToggleTask={toggleTask} onGarden={() => setScreen('garden')} onFocus={(task) => { setActiveTask(task); setScreen('focus'); }} onSettings={() => setScreen('settings')} /> : screen === 'garden' ? <GardenPage profile={profile} progress={progress} day={day} week={serverWeek} onBack={() => setScreen('home')} /> : screen === 'syllabus' ? <SyllabusPage profile={profile} day={day} syllabus={syllabus} loading={syllabusLoading} onBack={() => setScreen('home')} onToggle={toggleSyllabusTopic} /> : screen === 'focus' ? <FocusPage task={selectedTask} profile={profile} day={day} completedCount={(progress.tasksByDay[day] ?? []).length} completed={(progress.tasksByDay[day] ?? []).includes(selectedTask.id)} accessToken={accessToken} onBack={() => setScreen('home')} onComplete={() => { if (!(progress.tasksByDay[day] ?? []).includes(selectedTask.id)) toggleTask(selectedTask.id); }} /> : screen === 'schedule' ? <ScheduleManagerPage profile={profile} onChange={updateProfile} onBack={() => setScreen('settings')} /> : <SettingsPage profile={profile} onChange={updateProfile} onBack={() => setScreen('home')} onSchedule={() => setScreen('schedule')} onReset={resetJourney} onSignOut={signOut} />;
-  const isFocusScreen = screen === 'focus';
-  return <SafeAreaView style={styles.root} edges={isFocusScreen ? ['top', 'bottom'] : ['top']}><View style={styles.appContent}>{content}</View>{!isFocusScreen && <TabBar screen={screen} setScreen={(nextScreen) => { if (nextScreen === 'focus') setActiveTask(null); setScreen(nextScreen); }} />}</SafeAreaView>;
+  const content = screen === 'home' ? <HomePage profile={profile} progress={progress} day={day} week={serverWeek} onToggleTask={toggleTask} onGarden={() => setScreen('garden')} onFocus={(task) => { setActiveTask(task); setScreen('focus'); }} onProfile={() => setScreen('profile')} onSettings={() => setScreen('settings')} /> : screen === 'garden' ? <GardenPage profile={profile} progress={progress} day={day} week={serverWeek} onBack={() => setScreen('home')} /> : screen === 'syllabus' ? <SyllabusPage profile={profile} day={day} syllabus={syllabus} loading={syllabusLoading} onBack={() => setScreen('home')} onToggle={toggleSyllabusTopic} /> : screen === 'focus' ? <FocusPage task={selectedTask} profile={profile} day={day} completedCount={(progress.tasksByDay[day] ?? []).length} completed={(progress.tasksByDay[day] ?? []).includes(selectedTask.id)} accessToken={accessToken} onBack={() => setScreen('home')} onComplete={() => { if (!(progress.tasksByDay[day] ?? []).includes(selectedTask.id)) toggleTask(selectedTask.id); }} /> : screen === 'friends' ? <FriendsPage friends={friends} requests={friendRequests} loading={friendsLoading} onRefresh={refreshFriends} onSendRequest={sendFriendRequest} onRespond={respondToFriendRequest} onRemove={removeFriend} onVisit={(friend) => void openFriendProfile(friend)} onLeaderboard={() => setScreen('leaderboard')} /> : screen === 'leaderboard' ? <LeaderboardPage profile={profile} points={wallet.points} friends={friends} onBack={() => setScreen('friends')} onOpenFriend={(friend) => void openFriendProfile(friend)} onOpenSelf={() => setScreen('profile')} /> : screen === 'profile' ? <ProfilePage profile={profile} email={session.user.email ?? ''} userCode={userCode} progress={progress} day={day} week={serverWeek} friends={friends} coins={wallet.coins} points={wallet.points} onBack={() => setScreen('home')} onFriends={() => setScreen('friends')} onUploadPhoto={uploadProfilePhoto} /> : screen === 'friendProfile' && selectedFriendProfile ? <FriendProfilePage friend={selectedFriendProfile} onBack={() => setScreen('friends')} /> : screen === 'schedule' ? <ScheduleManagerPage profile={profile} onChange={updateProfile} onBack={() => setScreen('settings')} /> : <SettingsPage profile={profile} onChange={updateProfile} onBack={() => setScreen('home')} onSchedule={() => setScreen('schedule')} onReset={resetJourney} onSignOut={signOut} />;
+  const isFullScreen = screen === 'focus' || screen === 'leaderboard' || screen === 'profile' || screen === 'friendProfile';
+  return <SafeAreaView style={styles.root} edges={isFullScreen ? ['top', 'bottom'] : ['top']}><View style={styles.appContent}>{content}</View>{!isFullScreen && <TabBar screen={screen} setScreen={(nextScreen) => { if (nextScreen === 'focus') setActiveTask(null); setScreen(nextScreen); }} />}</SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.canvas }, appContent: { flex: 1 }, loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas, gap: 8 }, loadingText: { color: colors.muted, fontSize: 14 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 34 }, topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 46 }, brand: { flexDirection: 'row', alignItems: 'center', gap: 8 }, brandMark: { alignItems: 'center', justifyContent: 'center', width: 36, height: 36, borderRadius: 12, backgroundColor: colors.mint }, brandText: { color: colors.ink, fontSize: 18, letterSpacing: 2, fontWeight: '900' }, iconButton: { height: 42, width: 42, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }, pressed: { opacity: 0.76, transform: [{ scale: 0.98 }] },
   heading: { marginTop: 25, marginBottom: 22 }, eyebrow: { color: colors.muted, fontSize: 10, letterSpacing: 3, fontWeight: '700', marginBottom: 3 }, headingTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 34, lineHeight: 39, letterSpacing: -0.5 }, headingSub: { color: colors.muted, fontSize: 13, lineHeight: 20, marginTop: 5, maxWidth: 330 },
+  friendsTopIdentity: { flexDirection: 'row', alignItems: 'center', gap: 8 }, friendsTopIcon: { width: 35, height: 35, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }, friendsRefreshButton: { width: 39, height: 39, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }, friendsRefreshButtonDisabled: { opacity: 0.55 },
+  addFriendCard: { padding: 14, borderRadius: 20, backgroundColor: '#F1F8EE', borderWidth: 1, borderColor: '#C9DEC4', marginBottom: 23 }, addFriendHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 }, addFriendIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' }, addFriendTitle: { color: colors.ink, fontSize: 14, fontWeight: '900' }, addFriendSub: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 2 }, addFriendForm: { height: 47, marginTop: 13, borderRadius: 14, backgroundColor: colors.paper, borderWidth: 1, borderColor: '#C9DEC4', flexDirection: 'row', alignItems: 'center', paddingLeft: 12, paddingRight: 4 }, addFriendInput: { flex: 1, height: '100%', color: colors.ink, fontSize: 13, paddingRight: 8 }, addFriendButton: { width: 39, height: 39, borderRadius: 11, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' }, addFriendButtonDisabled: { opacity: 0.55 },
+  friendsSectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }, friendsSectionTitle: { color: colors.ink, fontSize: 19, letterSpacing: -0.3, fontWeight: '900' }, requestCount: { minWidth: 21, height: 21, paddingHorizontal: 6, borderRadius: 11, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' }, requestCountText: { color: '#fff', fontSize: 10, fontWeight: '900' }, friendTotal: { color: colors.muted, fontSize: 11, fontWeight: '700' }, friendListCard: { borderWidth: 1, borderColor: colors.border, borderRadius: 19, backgroundColor: colors.paper, overflow: 'hidden', marginBottom: 23 }, friendRow: { minHeight: 79, paddingHorizontal: 13, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }, friendVisit: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }, requestRow: { minHeight: 72, paddingHorizontal: 13, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 10 }, friendRowDivider: { borderBottomWidth: 1, borderBottomColor: colors.border }, friendAvatar: { width: 43, height: 43, borderRadius: 15, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }, friendAvatarText: { color: colors.forest, fontSize: 16, fontWeight: '900' }, friendCopy: { flex: 1, minWidth: 0 }, friendName: { color: colors.ink, fontSize: 13, fontWeight: '900' }, friendMeta: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 2 }, friendStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 7 }, friendStatPill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 7, backgroundColor: '#F3F7F1' }, friendStatText: { color: colors.forest, fontSize: 8, fontWeight: '900' }, requestActions: { flexDirection: 'row', gap: 6 }, acceptFriendButton: { width: 31, height: 31, borderRadius: 10, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' }, declineFriendButton: { width: 31, height: 31, borderRadius: 10, backgroundColor: '#FFF0F0', alignItems: 'center', justifyContent: 'center' }, friendActionDisabled: { opacity: 0.5 }, removeFriendButton: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas },
+  friendsEmpty: { minHeight: 178, paddingHorizontal: 25, borderRadius: 20, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }, friendsEmptyIcon: { width: 49, height: 49, borderRadius: 17, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center', marginBottom: 10 }, friendsEmptyTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 18, textAlign: 'center', marginTop: 8 }, friendsEmptySub: { color: colors.muted, fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 5, maxWidth: 265 },
   homeGarden: { overflow: 'hidden', borderRadius: 28, ...shadow }, homeGardenOverlay: { minHeight: 65, backgroundColor: colors.paper, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, gardenOverlayTitle: { color: colors.ink, fontSize: 16, fontWeight: '800' }, gardenOverlaySub: { color: colors.muted, fontSize: 12, marginTop: 3 },
   todayHeader: { marginTop: 27, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, sectionTitle: { color: colors.ink, fontSize: 20, letterSpacing: -0.4, fontWeight: '800' }, taskProgress: { color: colors.forest, fontSize: 13, fontWeight: '800' }, progressTrack: { width: '100%', height: 7, borderRadius: 7, backgroundColor: colors.border, overflow: 'hidden' }, progressFill: { height: '100%', borderRadius: 7 }, taskList: { gap: 10, marginTop: 15 }, taskCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper }, taskCardComplete: { backgroundColor: '#F3F8F1', borderColor: '#C8DEC9' }, taskIcon: { width: 41, height: 41, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, taskCopy: { flex: 1, paddingRight: 6 }, taskTitle: { color: colors.ink, fontSize: 14, fontWeight: '800', lineHeight: 19 }, doneText: { color: colors.muted, textDecorationLine: 'line-through' }, taskDetail: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 }, durationRow: { flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 7 }, durationText: { color: colors.muted, fontSize: 11, fontWeight: '600' }, taskActions: { alignItems: 'center', gap: 8 }, playButton: { width: 29, height: 29, borderRadius: 10, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }, checkButton: { width: 27, height: 27, borderRadius: 9, borderWidth: 2, borderColor: '#ABC4AF', alignItems: 'center', justifyContent: 'center' }, checkButtonDone: { borderColor: colors.forest, backgroundColor: colors.forest },
   noteCard: { flexDirection: 'row', gap: 12, borderRadius: 21, padding: 16, marginTop: 22 }, noteIcon: { height: 35, width: 35, borderRadius: 12, backgroundColor: '#FFFFFF9E', alignItems: 'center', justifyContent: 'center' }, noteTitle: { color: colors.ink, fontSize: 13, fontWeight: '800', marginBottom: 4 }, noteBody: { color: colors.muted, fontSize: 12, lineHeight: 17 },
@@ -999,6 +1313,16 @@ const styles = StyleSheet.create({
   profileAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.sun, borderWidth: 2, borderColor: colors.amberRich + '55' },
   profileAvatarText: { color: colors.ink, fontFamily: fonts.serif, fontSize: 18 },
   profileGreeting: { color: colors.ink, fontFamily: fonts.serif, fontSize: 20 },
+  profileHint: { color: colors.muted, fontSize: 9, fontWeight: '700', marginTop: -1 },
+  userAvatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.sun }, userAvatarFallbackText: { color: colors.ink, fontFamily: fonts.serif },
+  profileHero: { marginTop: 19, marginBottom: 16, padding: 18, borderRadius: 23, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 14 }, profilePhotoButton: { position: 'relative' }, profilePhotoEdit: { position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: 12, backgroundColor: colors.forest, borderWidth: 2, borderColor: colors.paper, alignItems: 'center', justifyContent: 'center' }, profileHeroName: { color: colors.ink, fontFamily: fonts.serif, fontSize: 25, lineHeight: 30 }, profileHeroLanguage: { color: colors.muted, fontSize: 11, textTransform: 'capitalize', marginTop: 3 },
+  profileIdCard: { minHeight: 102, padding: 16, marginBottom: 24, borderRadius: 20, backgroundColor: colors.mint, borderWidth: 1, borderColor: '#C9DEC4', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, profileIdLabel: { color: colors.forest, fontSize: 9, fontWeight: '900', letterSpacing: 1.2 }, profileIdValue: { color: colors.ink, fontFamily: fonts.serif, fontSize: 25, letterSpacing: 1.1, marginTop: 3 }, profileIdSub: { color: colors.muted, fontSize: 9, marginTop: 3 }, profileIdIcon: { width: 45, height: 45, borderRadius: 15, backgroundColor: colors.paper, alignItems: 'center', justifyContent: 'center' },
+  profileEmailCard: { minHeight: 65, marginTop: -12, marginBottom: 9, paddingHorizontal: 13, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 10 }, profileEmailIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }, profileEmailLabel: { color: colors.muted, fontSize: 8, letterSpacing: 0.9, fontWeight: '900' }, profileEmailValue: { color: colors.ink, fontSize: 11, fontWeight: '700', marginTop: 3 },
+  friendProfileHero: { minHeight: 93, alignItems: 'center', flexDirection: 'row', gap: 13, marginTop: 23, marginBottom: 18 }, rewardBalanceCard: { minHeight: 82, paddingHorizontal: 15, borderRadius: 20, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, rewardBalanceItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }, rewardBalanceIcon: { width: 38, height: 38, borderRadius: 13, alignItems: 'center', justifyContent: 'center' }, rewardBalanceDivider: { width: 1, height: 40, backgroundColor: colors.border, marginHorizontal: 8 }, rewardBalanceLabel: { color: colors.muted, fontSize: 9, letterSpacing: 1, fontWeight: '900' }, rewardBalanceValue: { color: colors.ink, fontSize: 21, fontWeight: '900', marginTop: 1 }, rewardHint: { paddingHorizontal: 12, paddingVertical: 10, marginTop: 9, borderRadius: 15, backgroundColor: '#F5FAF3', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, rewardHintText: { flex: 1, color: colors.forest, fontSize: 10, lineHeight: 14, fontWeight: '700' },
+  profileSectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 23, marginBottom: 10 }, profileSectionTitle: { color: colors.ink, fontSize: 19, fontWeight: '900', letterSpacing: -0.3 }, profileSectionMeta: { color: colors.muted, fontSize: 10, fontWeight: '700' }, profileSectionLink: { color: colors.forest, fontSize: 11, fontWeight: '900' }, profileStatsGrid: { flexDirection: 'row', gap: 9 }, profileLanguageCard: { minHeight: 68, marginTop: 10, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 10 }, profileLanguageIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center' }, profileLanguageTitle: { color: colors.ink, fontSize: 13, fontWeight: '900' }, profileLanguageSub: { color: colors.muted, fontSize: 10, marginTop: 2 },
+  profileCheckinCard: { minHeight: 72, paddingHorizontal: 14, borderRadius: 19, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, profileCheckinDay: { width: 37, alignItems: 'center', gap: 6 }, profileCheckinDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' }, profileCheckinDotDone: { backgroundColor: colors.forest, borderColor: colors.forest }, profileCheckinDotToday: { borderColor: colors.amberRich, borderWidth: 2 }, profileCheckinLabel: { color: colors.muted, fontSize: 8, fontWeight: '700' }, profileCheckinLabelToday: { color: colors.ink, fontWeight: '900' },
+  profileFriendsEmpty: { minHeight: 57, paddingHorizontal: 13, borderRadius: 17, backgroundColor: '#F5FAF3', borderWidth: 1, borderColor: '#CDE1C8', flexDirection: 'row', alignItems: 'center', gap: 9 }, profileFriendsEmptyText: { flex: 1, color: colors.forest, fontSize: 11, fontWeight: '700' }, profileFriendsCard: { minHeight: 61, paddingHorizontal: 13, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center' }, profileFriendAvatar: { width: 31, height: 31, marginRight: -6, borderRadius: 11, backgroundColor: colors.mint, borderWidth: 2, borderColor: colors.paper, alignItems: 'center', justifyContent: 'center' }, profileFriendAvatarText: { color: colors.forest, fontSize: 11, fontWeight: '900' }, profileFriendMore: { width: 31, height: 31, marginRight: 7, borderRadius: 11, backgroundColor: colors.canvas, borderWidth: 2, borderColor: colors.paper, alignItems: 'center', justifyContent: 'center' }, profileFriendMoreText: { color: colors.muted, fontSize: 9, fontWeight: '900' }, profileFriendsText: { flex: 1, color: colors.ink, fontSize: 11, fontWeight: '800', marginLeft: 12 },
+  profileAchievementsCard: { borderRadius: 20, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 8 }, profileAchievement: { minHeight: 43, paddingHorizontal: 7, borderRadius: 13, backgroundColor: '#F5FAF3', flexDirection: 'row', alignItems: 'center', gap: 9 }, profileAchievementLocked: { backgroundColor: colors.canvas, opacity: 0.7 }, profileAchievementIcon: { width: 29, height: 29, borderRadius: 10, backgroundColor: colors.border, alignItems: 'center', justifyContent: 'center' }, profileAchievementIconDone: { backgroundColor: colors.mint }, profileAchievementTitle: { flex: 1, color: colors.ink, fontSize: 11, fontWeight: '800' }, profileAchievementTitleLocked: { color: colors.muted }, profileAchievementDay: { color: colors.muted, fontSize: 9, fontWeight: '900' },
   checkinProgressPill: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   checkinProgressPillDone: { backgroundColor: colors.mint, borderColor: colors.moss },
   checkinProgressText: { color: colors.muted, fontSize: 11, fontWeight: '700' },
@@ -1052,4 +1376,6 @@ const styles = StyleSheet.create({
   todayPlanCard: { borderRadius: 18, borderWidth: 1, borderColor: '#CFE0CA', backgroundColor: '#F5FAF3', marginBottom: 13, overflow: 'hidden' }, todayPlanHeader: { minHeight: 64, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 9 }, todayPlanIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mint }, todayPlanEyebrow: { color: colors.forest, fontSize: 8, letterSpacing: 1, fontWeight: '900' }, todayPlanTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 15, marginTop: 2 }, todayPlanBody: { paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: '#DDE9D9' }, todayTopicCard: { marginTop: 11, padding: 11, borderRadius: 13, backgroundColor: colors.paper, borderWidth: 1, borderColor: '#DDE9D9' }, todayTopicHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, todayTopicKind: { flexDirection: 'row', alignItems: 'center', gap: 5 }, todayTopicKindText: { color: colors.forest, fontSize: 8, letterSpacing: 0.9, fontWeight: '900' }, todayCompletePill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 7, backgroundColor: colors.mint }, todayCompleteText: { color: colors.forest, fontSize: 8, fontWeight: '900' }, todayTopicTitle: { color: colors.ink, fontSize: 14, fontWeight: '900', marginTop: 7, marginBottom: 7 }, todayStepRow: { flexDirection: 'row', gap: 8, paddingTop: 8 }, todayStepNumber: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mint }, todayStepNumberText: { color: colors.forest, fontSize: 9, fontWeight: '900' }, todayStepTitle: { color: colors.ink, fontSize: 11, fontWeight: '900' }, todayStepText: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 1 }, todaySuccessText: { color: colors.forest, fontSize: 10, lineHeight: 14, fontWeight: '700', marginTop: 11, paddingTop: 9, borderTopWidth: 1, borderTopColor: '#DDE9D9' }, todayNoPlanText: { color: colors.muted, fontSize: 11, lineHeight: 16, paddingTop: 11 },
   syllabusLoadMore: { minHeight: 47, marginTop: 4, borderRadius: 15, borderWidth: 1, borderColor: '#C8DAC3', backgroundColor: '#F5FAF3', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, syllabusLoadMoreText: { color: colors.forest, fontSize: 12, fontWeight: '900' }, syllabusLoadMoreCount: { color: colors.muted, fontSize: 10, marginLeft: 2 },
   syllabusRoadmap: { gap: 13 }, roadmapPhase: { padding: 13, borderRadius: 19, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border }, roadmapPhaseHeader: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.border }, roadmapPhaseIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.mint }, roadmapPhaseTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 16 }, roadmapPhaseDays: { color: colors.muted, fontSize: 9, marginTop: 2 }, roadmapPhaseCount: { color: colors.forest, fontSize: 8, letterSpacing: 0.6, fontWeight: '900' }, roadmapTopic: { flexDirection: 'row', paddingTop: 11 }, roadmapTimeline: { width: 39, alignItems: 'center' }, roadmapDayDot: { minWidth: 31, height: 23, paddingHorizontal: 4, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.canvas, borderWidth: 1, borderColor: colors.border }, roadmapDayDotToday: { backgroundColor: colors.forest, borderColor: colors.forest }, roadmapDayDotText: { color: colors.muted, fontSize: 8, fontWeight: '900' }, roadmapDayDotTextToday: { color: '#fff' }, roadmapLine: { width: 1, flex: 1, minHeight: 21, backgroundColor: colors.border, marginTop: 5 }, roadmapTopicContent: { flex: 1, minWidth: 0, paddingBottom: 5 }, roadmapTopicRow: { minHeight: 29, flexDirection: 'row', alignItems: 'center', gap: 8 }, roadmapTopicOpen: { flex: 1, minHeight: 30, justifyContent: 'center' }, roadmapTodayText: { color: colors.forest, fontSize: 8, letterSpacing: 0.8, fontWeight: '900', marginTop: 3 },
+  leaderboardLaunchCard: { minHeight: 104, padding: 15, marginTop: -6, marginBottom: 17, borderRadius: 22, overflow: 'hidden', backgroundColor: '#F0F8ED', borderWidth: 1, borderColor: '#C8DFC1', flexDirection: 'row', alignItems: 'center', gap: 11 }, leaderboardLaunchIcon: { width: 47, height: 47, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.forest, borderWidth: 1, borderColor: '#376B48' }, leaderboardLaunchEyebrow: { color: colors.forest, fontSize: 8, fontWeight: '900', letterSpacing: 1.2 }, leaderboardLaunchTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 19, marginTop: 2 }, leaderboardLaunchSub: { color: colors.muted, fontSize: 10, lineHeight: 14, marginTop: 3 }, leaderboardLaunchArrow: { width: 31, height: 31, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D8ECD2' },
+  leaderboardScreen: { flex: 1, backgroundColor: colors.canvas }, leaderboardContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 34, backgroundColor: colors.canvas }, leaderboardTopRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, leaderboardBack: { width: 38, height: 38, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.paper }, leaderboardTopIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 10 }, leaderboardTopIcon: { width: 31, height: 31, borderRadius: 10, borderWidth: 1, borderColor: '#D6C18E', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF4DA' }, leaderboardTopEyebrow: { color: colors.muted, fontSize: 7, letterSpacing: 1, fontWeight: '900' }, leaderboardTopTitle: { color: colors.ink, fontSize: 11, fontWeight: '900', marginTop: 1 }, leaderboardTopLive: { height: 25, paddingHorizontal: 7, borderRadius: 8, borderWidth: 1, borderColor: '#B9D5B1', backgroundColor: '#EEF7E9', flexDirection: 'row', alignItems: 'center', gap: 4 }, leaderboardTopLiveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#2CBB5D' }, leaderboardTopLiveText: { color: colors.forest, fontSize: 7, letterSpacing: .6, fontWeight: '900' }, leaderboardHero: { paddingTop: 22, paddingBottom: 14 }, leaderboardHeroEyebrow: { color: colors.forest, fontSize: 9, letterSpacing: 1.5, fontWeight: '900' }, leaderboardHeroTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 31, lineHeight: 36, letterSpacing: -.6, marginTop: 3 }, leaderboardHeroSub: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 5, maxWidth: 310 }, leaderboardPrivacyNote: { minHeight: 45, paddingHorizontal: 11, paddingVertical: 9, marginTop: 11, borderRadius: 13, backgroundColor: '#F1F8ED', borderWidth: 1, borderColor: '#C7DEC0', flexDirection: 'row', alignItems: 'center', gap: 8 }, leaderboardPrivacyText: { flex: 1, color: '#49634D', fontSize: 10, lineHeight: 14, fontWeight: '700' }, leaderboardRankHeading: { marginTop: 24, marginBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }, leaderboardRankTitle: { color: colors.ink, fontFamily: fonts.serif, fontSize: 19, letterSpacing: -.3 }, leaderboardRankSub: { color: colors.muted, fontSize: 10, marginTop: 2 }, leaderboardRankCount: { minWidth: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#E5F1E0', borderWidth: 1, borderColor: '#C7DEC0' }, leaderboardRankCountText: { color: colors.forest, fontSize: 11, fontWeight: '900' }, leaderboardRankList: { overflow: 'hidden', borderRadius: 17, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper }, leaderboardRankRow: { minHeight: 72, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 9 }, leaderboardRankRowCurrent: { backgroundColor: '#FFF8E9' }, leaderboardRankDivider: { borderBottomWidth: 1, borderBottomColor: colors.border }, leaderboardRankNumber: { width: 25, height: 25, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6FAF3' }, leaderboardRankNumberText: { fontSize: 10, fontWeight: '900' }, leaderboardNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 }, leaderboardRankName: { color: colors.ink, fontSize: 12, fontWeight: '900', flexShrink: 1 }, leaderboardRankMeta: { color: colors.muted, fontSize: 9, marginTop: 1 }, leaderboardBarTrack: { height: 3, borderRadius: 3, backgroundColor: '#E1EADD', overflow: 'hidden', marginTop: 6, marginRight: 4 }, leaderboardBarFill: { height: '100%', borderRadius: 3 }, leaderboardPointPill: { minWidth: 53, paddingHorizontal: 7, paddingVertical: 5, borderRadius: 8, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 3, backgroundColor: '#F4F8F1', borderWidth: 1, borderColor: '#D5E2CE' }, leaderboardPointText: { color: colors.ink, fontSize: 9, fontWeight: '900' },
 });
