@@ -97,7 +97,7 @@ CHECKIN_REWARDS = {
     60: (200, 100, "Day 60 legend reward"),
 }
 
-OFFICIAL_DOCS_ORIGIN = "https://docs-vokai.vercel.app"
+OFFICIAL_DOCS_ORIGINS = ("https://docs-vokai.vercel.app", "https://vokai.pages.dev")
 LOCAL_DOCS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 
 
@@ -108,7 +108,7 @@ def cors_origins() -> list[str]:
     # The public VOKAI Docs client and its Vite development server are
     # first-party consumers of this API. Keep them available even if Render's
     # environment was saved with an older origin list.
-    for origin in (OFFICIAL_DOCS_ORIGIN, *LOCAL_DOCS_ORIGINS):
+    for origin in (*OFFICIAL_DOCS_ORIGINS, *LOCAL_DOCS_ORIGINS):
         if origin not in configured:
             configured.append(origin)
     return configured
