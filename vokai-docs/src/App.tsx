@@ -217,8 +217,8 @@ function ProductTour() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {steps.map(({ step, index }) => {
                   const isActive = index === activeIndex;
-                  return <button key={step.id} type="button" onClick={() => selectStep(index)} className={`tour-step-card text-left ${isActive ? "tour-step-card-active" : ""}`} aria-pressed={isActive}>
-                    <div className="tour-step-thumb"><img src={step.image} alt="" /><span className="tour-step-number">{String(index + 1).padStart(2, "0")}</span>{isActive && <span className="tour-step-viewing">Viewing</span>}</div>
+                  return <button key={step.id} type="button" onClick={() => selectStep(index)} aria-label={`View VOKAI features: ${step.title}`} className={`tour-step-card text-left ${isActive ? "tour-step-card-active" : ""}`} aria-pressed={isActive}>
+                    <div className="tour-step-thumb"><img src={step.image} alt={`${step.title} thumbnail preview`} /><span className="tour-step-number">{String(index + 1).padStart(2, "0")}</span>{isActive && <span className="tour-step-viewing">Viewing</span>}</div>
                     <div className="min-w-0"><p className="text-[10px] font-bold tracking-[0.13em] text-vokai-forest uppercase">{step.eyebrow}</p><h3 className="mt-1 text-sm font-semibold leading-5 text-vokai-ink">{step.title}</h3><p className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500">{step.description}</p></div>
                   </button>;
                 })}
@@ -235,7 +235,7 @@ function NavLinks({ items }: { items: NavItem[] }) {
   return (
     <nav className="space-y-1">
       {items.map(({ id, label, icon: Icon }) => (
-        <a key={id} href={`#${id}`} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-white hover:text-vokai-ink">
+        <a key={id} href={`#${id}`} aria-label={`Navigate to ${label} section`} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-stone-600 transition hover:bg-white hover:text-vokai-ink">
           <Icon className="size-4 text-stone-400" /> {label}
         </a>
       ))}
@@ -387,20 +387,20 @@ function App() {
       <div ref={bloomLayerRef} className="cursor-bloom-layer" aria-hidden="true" />
       <header className="landing-header">
         <div className="landing-header-inner">
-          <a href="#start" className="landing-brand" aria-label="VOKAI home">
+          <a href="#start" className="landing-brand" aria-label="VOKAI - Learn Coding & Build Steady Programming Habits">
             <span className="landing-brand-mark"><Sprout className="size-5" /></span>
             <span>VOKAI</span>
           </a>
           <nav className="landing-nav" aria-label="Landing page navigation">
-            <a href="#product-tour">Features</a>
-            <a href="#progress">Progress</a>
-            <a href="#daily-journey">About</a>
-            <a href="#privacy">Contact</a>
+            <a href="#product-tour" aria-label="Explore VOKAI product features and visual tour">Features</a>
+            <a href="#progress" aria-label="Track your learning progress and garden milestones">Progress</a>
+            <a href="#daily-journey" aria-label="About the daily coding journey framework">About</a>
+            <a href="#privacy" aria-label="Review our privacy principles and data control">Contact</a>
           </nav>
           <div className="landing-header-actions">
-            <a className="landing-prebook-link" href="#premium" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /> Pre-book</a>
+            <a className="landing-prebook-link" href="#premium" aria-label="Pre-book VOKAI Premium coding companion plan" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /> Pre-book</a>
             <div className={`landing-store-menu ${storeMenuOpen ? "is-open" : ""}`}>
-            <button type="button" className="landing-journey-button" onClick={() => setStoreMenuOpen((open) => !open)} aria-expanded={storeMenuOpen} aria-haspopup="menu">
+            <button type="button" className="landing-journey-button" onClick={() => setStoreMenuOpen((open) => !open)} aria-expanded={storeMenuOpen} aria-haspopup="menu" aria-label="Toggle download options menu for VOKAI application">
               Begin journey <ChevronDown className="size-4" />
             </button>
             <div className="landing-store-popover" role="menu" aria-label="Download VOKAI">
@@ -411,7 +411,7 @@ function App() {
             </div>
             </div>
           </div>
-          <a className="landing-mobile-prebook" href="#premium" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /><span>Pre-book</span></a>
+          <a className="landing-mobile-prebook" href="#premium" aria-label="Pre-book VOKAI Premium coding plan on mobile" onClick={(event) => { event.preventDefault(); navigateToPremium(); }}><Sparkles className="size-3.5" /><span>Pre-book</span></a>
         </div>
       </header>
 
@@ -425,7 +425,7 @@ function App() {
             <h1>Make room to <span>learn coding</span> with VOKAI.</h1>
             <p>Personalised, AI-powered guidance built for the programming life you already have. Choose a focused next step, build steady coding habits, and make every session count.</p>
           </div>
-          <a className="landing-hero-cta" href="#daily-journey"><Play className="size-4 fill-current" /> Begin journey</a>
+          <a className="landing-hero-cta" href="#daily-journey" aria-label="Begin your personalized daily coding journey with VOKAI"><Play className="size-4 fill-current" /> Begin journey</a>
         </div>
         <a className="landing-scroll-cue" href="#guide" aria-label="Scroll to the VOKAI guide"><ChevronDown /></a>
       </section>
@@ -439,7 +439,7 @@ function App() {
           <div className="mt-8 rounded-2xl bg-vokai-ink p-4 text-white">
             <p className="text-xs font-semibold text-[#B8D6B6]">A note on privacy</p>
             <p className="mt-1 text-sm leading-5 text-stone-200">Your practice should feel supported, never silently watched. Planned insights are opt-in by design.</p>
-            <a href="#privacy" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#CBE3C7] hover:text-white">Read privacy principles <ArrowRight className="size-3" /></a>
+            <a href="#privacy" aria-label="Read our core privacy and user control principles" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#CBE3C7] hover:text-white">Read privacy principles <ArrowRight className="size-3" /></a>
           </div>
         </aside>
 
@@ -540,7 +540,7 @@ function App() {
             ].map(([question, answer]) => <details key={question} className="group rounded-2xl border border-stone-200 bg-white px-5"><summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 font-semibold text-vokai-ink"><span>{question}</span><ChevronRight className="size-4 text-stone-400 transition group-open:rotate-90" /></summary><p className="border-t border-stone-100 py-4 text-sm leading-6 text-stone-600">{answer}</p></details>)}</div>
           </section>
 
-          <footer className="border-t border-stone-200 py-8 text-sm text-stone-500">Built for steady progress, not perfect streaks. <a href="https://github.com/aadityakumarsah/vokai-app" className="font-medium text-vokai-forest hover:underline">View VOKAI on GitHub</a>.</footer>
+          <footer className="border-t border-stone-200 py-8 text-sm text-stone-500">Built for steady progress, not perfect streaks. <a href="https://github.com/aadityakumarsah/vokai-app" aria-label="View VOKAI open-source repository on GitHub" className="font-medium text-vokai-forest hover:underline">View VOKAI on GitHub</a>.</footer>
         </main>
       </div>
 

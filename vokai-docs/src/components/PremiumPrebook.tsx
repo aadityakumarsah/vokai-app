@@ -81,7 +81,7 @@ export function PremiumPrebook() {
             <div className="mt-6 flex flex-col gap-2.5 sm:mt-7 sm:grid sm:grid-cols-3 sm:gap-3">
               {plans.map((item) => {
                 const selected = plan === item.id;
-                return <button key={item.id} type="button" onClick={() => setPlan(item.id)} className={`relative flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left transition duration-200 sm:block sm:rounded-2xl sm:p-4 ${selected ? "border-[#F9DEA3] bg-white/16 shadow-[0_10px_24px_rgba(0,0,0,.15)]" : "border-white/14 bg-white/[.06] hover:border-white/30 hover:bg-white/[.1]"}`} aria-pressed={selected}>
+                return <button key={item.id} type="button" onClick={() => setPlan(item.id)} aria-label={`Select VOKAI Premium ${item.label} pricing plan`} className={`relative flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-left transition duration-200 sm:block sm:rounded-2xl sm:p-4 ${selected ? "border-[#F9DEA3] bg-white/16 shadow-[0_10px_24px_rgba(0,0,0,.15)]" : "border-white/14 bg-white/[.06] hover:border-white/30 hover:bg-white/[.1]"}`} aria-pressed={selected}>
                   {item.featured && <span className="absolute -top-2.5 left-4 rounded-full bg-[#F9DEA3] px-2 py-0.5 text-[9px] font-extrabold tracking-wider text-[#5C431D] uppercase sm:left-3">Popular</span>}
                   
                   <div className="flex items-baseline gap-2 sm:block sm:gap-0">
@@ -113,7 +113,7 @@ export function PremiumPrebook() {
               </p>
             )}
             {message && <p className="mt-3 rounded-xl border border-[#F8D7A7]/30 bg-[#7F4D3E]/35 px-3 py-2 text-xs leading-5 text-[#FFE1B3] sm:mt-4" role="status">{message}</p>}
-            <button type="submit" disabled={submitting} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F9DEA3] px-4 text-sm font-extrabold text-[#34513E] transition hover:bg-[#FFF0C8] disabled:cursor-wait disabled:opacity-70 sm:mt-5 sm:h-11">
+            <button type="submit" disabled={submitting} aria-label={`Submit pre-booking form and pre-book VOKAI Premium for ${plans.find((item) => item.id === plan)?.price}`} className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#F9DEA3] px-4 text-sm font-extrabold text-[#34513E] transition hover:bg-[#FFF0C8] disabled:cursor-wait disabled:opacity-70 sm:mt-5 sm:h-11">
               {submitting ? <LoaderCircle className="size-4 animate-spin" /> : <Crown className="size-4" />} {submitting ? "Opening checkout…" : `Pre-book for ${plans.find((item) => item.id === plan)?.price}`} <ArrowRight className="size-4" />
             </button>
             <p className="mt-3 text-center text-[11px] leading-5 text-white/52">You will be redirected to Dodo Payments to complete this pre-booking.</p>
