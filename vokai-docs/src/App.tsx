@@ -422,7 +422,7 @@ function App() {
         <div className="docs-hero-scrim" aria-hidden="true" />
         <div ref={heroContentRef} className="docs-hero-content">
           <div className="docs-hero-copy">
-            <h1>Make room to <span>learn coding</span> with VOKAI.</h1>
+            <h1>Make room for <span>coding.</span><span className="sr-only"> Learn coding with VOKAI</span></h1>
             <p>Personalised, AI-powered guidance built for the programming life you already have. Choose a focused next step, build steady coding habits, and make every session count.</p>
           </div>
           <a className="landing-hero-cta" href="#daily-journey" aria-label="Begin your personalized daily coding journey with VOKAI"><Play className="size-4 fill-current" /> Begin journey</a>
