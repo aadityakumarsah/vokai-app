@@ -422,8 +422,8 @@ function App() {
         <div className="docs-hero-scrim" aria-hidden="true" />
         <div ref={heroContentRef} className="docs-hero-content">
           <div className="docs-hero-copy">
-            <h1>Make room for <span>coding.</span></h1>
-            <p>AI-powered guidance for the coding life you already have. Choose a focused next step, learn steadily, and make every session count.</p>
+            <h1>Make room to <span>learn coding</span> with VOKAI.</h1>
+            <p>Personalised, AI-powered guidance built for the programming life you already have. Choose a focused next step, build steady coding habits, and make every session count.</p>
           </div>
           <a className="landing-hero-cta" href="#daily-journey"><Play className="size-4 fill-current" /> Begin journey</a>
         </div>
@@ -451,7 +451,7 @@ function App() {
                 {sidebarHidden ? <PanelLeftOpen /> : <PanelLeftClose />}
               </Button>
             </div>
-            <SectionTitle eyebrow="Start here" title="Build a calm, consistent coding practice.">VOKAI turns a vague goal into one clear, manageable next step each day—so practice can fit around the rest of your life.</SectionTitle>
+            <SectionTitle eyebrow="Start here" title="Learn coding with calm, consistent habits.">VOKAI turns a vague goal into one clear, manageable next step each day—so your practice fits around the rest of your life.</SectionTitle>
             <div className="mt-12 grid gap-4 md:grid-cols-3">
               <FeatureCard icon={Rocket} title="Start without overwhelm" status="available">Your plan is broken into three small actions: learn, build, and reflect. You always know what comes next.</FeatureCard>
               <FeatureCard icon={Bot} title="Ask when you are stuck" status="available">Use Focus Coach for a smaller next step, an explanation, or a simple plan for the time you have right now.</FeatureCard>
